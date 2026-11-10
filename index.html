@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <!-- Nothing may be loaded from or sent to another server: PDFs never leave the device. -->
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self'; worker-src 'self'; connect-src 'self' blob: data:; img-src 'self' blob: data:; font-src 'self' blob: data:; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>PDF Studio</title>
+  <meta name="description" content="Rearrange, rotate and delete PDF pages in your browser. Works offline; your files are never uploaded.">
+  <meta name="theme-color" content="#f4f3ef" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#181816" media="(prefers-color-scheme: dark)">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/icon-180.png">
+  <link rel="stylesheet" href="src/styles.css">
+  <script type="module" src="src/app.js"></script>
+</head>
+<body>
+  <svg class="sprite" aria-hidden="true">
+    <symbol id="i-logo" viewBox="0 0 24 24"><path d="M7 3.5h7l4 4V17a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 6 17V5a1.5 1.5 0 0 1 1-1.5Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M14 3.5V7.5h4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M3.5 9v11a1.5 1.5 0 0 0 1.5 1.5h9" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></symbol>
+    <symbol id="i-add" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+    <symbol id="i-undo" viewBox="0 0 24 24"><path d="M9 14 4 9l5-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+    <symbol id="i-redo" viewBox="0 0 24 24"><path d="m15 14 5-5-5-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v11m-4.5-4.5L12 15l4.5-4.5M5 19.5h14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-rotate-left" viewBox="0 0 24 24"><path d="M4.5 4.5v5h5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M5.3 14.5A7.5 7.5 0 1 0 6.6 7L4.5 9.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-rotate-right" viewBox="0 0 24 24"><path d="M19.5 4.5v5h-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M18.7 14.5A7.5 7.5 0 1 1 17.4 7l2.1 2.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4.5 6.5h15M9.5 6.5V4.8c0-.7.6-1.3 1.3-1.3h2.4c.7 0 1.3.6 1.3 1.3v1.7M6.5 6.5l.8 12.1c.1 1 .9 1.9 2 1.9h5.4c1.1 0 1.9-.9 2-1.9l.8-12.1M10 10.5v6M14 10.5v6" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-close" viewBox="0 0 24 24"><path d="m6.5 6.5 11 11m0-11-11 11" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="m5.5 12.5 4 4 9-9" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M9.6 9.6a2.5 2.5 0 1 1 3.4 2.3c-.6.3-1 .8-1 1.5v.4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><circle cx="12" cy="16.9" r="1" fill="currentColor"/></symbol>
+    <symbol id="i-file" viewBox="0 0 48 48"><path d="M14 6h15l9 9v25a3 3 0 0 1-3 3H14a3 3 0 0 1-3-3V9a3 3 0 0 1 3-3Z" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round"/><path d="M29 6v9h9M24 21v13m-5.5-5.5L24 34l5.5-5.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  </svg>
+
+  <header class="topbar">
+    <div class="brand">
+      <svg class="brand-mark" aria-hidden="true"><use href="#i-logo"/></svg>
+      <span>PDF Studio</span>
+    </div>
+    <div class="actions">
+      <button type="button" class="button icon-only" id="undo" disabled aria-keyshortcuts="Control+Z" title="Undo (Ctrl+Z)">
+        <svg aria-hidden="true"><use href="#i-undo"/></svg><span class="label">Undo</span>
+      </button>
+      <button type="button" class="button icon-only" id="redo" disabled aria-keyshortcuts="Control+Shift+Z" title="Redo (Ctrl+Shift+Z)">
+        <svg aria-hidden="true"><use href="#i-redo"/></svg><span class="label">Redo</span>
+      </button>
+      <span class="divider" aria-hidden="true"></span>
+      <button type="button" class="button" id="add" title="Add PDF files (Ctrl+O)">
+        <svg aria-hidden="true"><use href="#i-add"/></svg><span class="label">Add PDFs</span>
+      </button>
+      <button type="button" class="button primary" id="download" disabled title="Download the edited PDF (Ctrl+S)">
+        <svg aria-hidden="true"><use href="#i-download"/></svg><span class="label">Download</span>
+      </button>
+      <button type="button" class="button icon-only ghost" id="help" title="Keyboard shortcuts">
+        <svg aria-hidden="true"><use href="#i-help"/></svg><span class="label">Keyboard shortcuts</span>
+      </button>
+    </div>
+    <input type="file" id="file-input" accept="application/pdf,.pdf" multiple hidden>
+  </header>
+
+  <div class="contextbar" id="contextbar" hidden>
+    <div class="summary" id="summary"></div>
+    <div class="selection-actions" id="selection-actions" hidden>
+      <span class="selection-count" id="selection-count"></span>
+      <button type="button" class="button small" id="sel-rotate-left" title="Rotate left (Shift+R)">
+        <svg aria-hidden="true"><use href="#i-rotate-left"/></svg><span class="label">Left</span>
+      </button>
+      <button type="button" class="button small" id="sel-rotate-right" title="Rotate right (R)">
+        <svg aria-hidden="true"><use href="#i-rotate-right"/></svg><span class="label">Right</span>
+      </button>
+      <button type="button" class="button small danger" id="sel-delete" title="Delete (Del)">
+        <svg aria-hidden="true"><use href="#i-trash"/></svg><span class="label">Delete</span>
+      </button>
+      <button type="button" class="button small ghost icon-only" id="sel-clear" title="Clear selection (Esc)">
+        <svg aria-hidden="true"><use href="#i-close"/></svg><span class="label">Clear selection</span>
+      </button>
+    </div>
+    <div class="view-controls">
+      <label class="size-control" title="Thumbnail size">
+        <span class="visually-hidden">Thumbnail size</span>
+        <svg aria-hidden="true" class="size-small"><use href="#i-logo"/></svg>
+        <input type="range" id="thumb-size" min="96" max="264" step="8" value="168">
+        <svg aria-hidden="true" class="size-large"><use href="#i-logo"/></svg>
+      </label>
+      <button type="button" class="button small ghost" id="clear-all">Start over</button>
+    </div>
+  </div>
+
+  <main id="main">
+    <section class="empty" id="empty">
+      <div class="dropzone" id="dropzone">
+        <svg class="dropzone-icon" aria-hidden="true"><use href="#i-file"/></svg>
+        <h1>Rearrange, rotate and delete PDF pages</h1>
+        <p>Drop PDF files here, or</p>
+        <button type="button" class="button primary large" id="choose">Choose PDF files</button>
+        <ul class="promises">
+          <li><svg aria-hidden="true"><use href="#i-check"/></svg>Your files stay on this device. Nothing is uploaded.</li>
+          <li><svg aria-hidden="true"><use href="#i-check"/></svg>Works offline once the page has loaded.</li>
+          <li><svg aria-hidden="true"><use href="#i-check"/></svg>Combine several PDFs into one.</li>
+        </ul>
+      </div>
+    </section>
+
+    <ul class="pages" id="pages" role="listbox" aria-label="Pages" aria-multiselectable="true" hidden></ul>
+  </main>
+
+  <div class="drop-overlay" id="drop-overlay" aria-hidden="true">
+    <div><svg aria-hidden="true"><use href="#i-file"/></svg><p>Drop to add the PDFs</p></div>
+  </div>
+
+  <div class="toasts" id="toasts" role="status" aria-live="polite"></div>
+  <div class="visually-hidden" id="announcer" aria-live="assertive"></div>
+
+  <dialog id="shortcuts" aria-labelledby="shortcuts-title">
+    <form method="dialog">
+      <header>
+        <h2 id="shortcuts-title">Keyboard shortcuts</h2>
+        <button class="button ghost icon-only" value="close" title="Close"><svg aria-hidden="true"><use href="#i-close"/></svg><span class="label">Close</span></button>
+      </header>
+      <dl>
+        <dt><kbd>←</kbd> <kbd>→</kbd> <kbd>↑</kbd> <kbd>↓</kbd></dt><dd>Move between pages</dd>
+        <dt><kbd>Space</kbd></dt><dd>Select or unselect a page</dd>
+        <dt><kbd>Shift</kbd> + arrows</dt><dd>Select a range</dd>
+        <dt><kbd>Ctrl</kbd> + <kbd>A</kbd></dt><dd>Select all pages</dd>
+        <dt><kbd>Ctrl</kbd> + arrows</dt><dd>Move the selected pages</dd>
+        <dt><kbd>R</kbd> / <kbd>Shift</kbd> + <kbd>R</kbd></dt><dd>Rotate right / left</dd>
+        <dt><kbd>Del</kbd></dt><dd>Delete the selected pages</dd>
+        <dt><kbd>Ctrl</kbd> + <kbd>Z</kbd> / <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>Z</kbd></dt><dd>Undo / redo</dd>
+        <dt><kbd>Ctrl</kbd> + <kbd>O</kbd></dt><dd>Add PDF files</dd>
+        <dt><kbd>Ctrl</kbd> + <kbd>S</kbd></dt><dd>Download the result</dd>
+        <dt><kbd>Esc</kbd></dt><dd>Clear the selection, cancel dragging</dd>
+      </dl>
+      <p class="hint">With the mouse: drag pages to reorder them. <kbd>Ctrl</kbd>-click or <kbd>Shift</kbd>-click selects several. On a touch screen, tap to select and press and hold to drag.</p>
+    </form>
+  </dialog>
+</body>
+</html>

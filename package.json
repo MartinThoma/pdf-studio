@@ -1,0 +1,21 @@
+{
+  "name": "pdf-studio",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Rearrange, rotate and delete PDF pages in the browser. Offline-first static web app; files never leave the device.",
+  "type": "module",
+  "license": "MIT",
+  "scripts": {
+    "test": "node --test \"tests/*.test.js\"",
+    "vendor": "node scripts/vendor.js",
+    "start": "node scripts/serve.js",
+    "test:browser": "node scripts/browser-test.js",
+    "icons": "node scripts/icons.js",
+    "manifest": "node scripts/build-manifest.js"
+  },
+  "devDependencies": {
+    "pdf-lib": "1.17.1",
+    "pdfjs-dist": "6.5.438",
+    "playwright": "^1.65.0"
+  }
+}
