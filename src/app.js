@@ -1,6 +1,7 @@
 // The editor: page grid, selection, drag and drop, keyboard, undo, upload and download.
 
 import { History, insert, move, normalizeRotation, pagesOf, remove, rotate } from "./model.js";
+import { setupInstall } from "./install.js";
 import { PreviewRenderer, openPreviewDocument } from "./thumbnails.js";
 import { PdfWorker } from "./worker-client.js";
 
@@ -537,7 +538,7 @@ function finishDrag(apply) {
 // Keyboard
 
 document.addEventListener("keydown", (event) => {
-  if (ui.shortcuts.open) return;
+  if (document.querySelector("dialog[open]")) return;
   const mod = event.ctrlKey || event.metaKey;
   const key = event.key;
   const inField = event.target.closest?.("input, textarea, select");
@@ -864,6 +865,8 @@ function announce(message) {
 // ---------------------------------------------------------------------------------------------
 // Offline: service worker
 
+const install = setupInstall({ button: $("install"), dialog: $("install-dialog"), toast });
+
 if ("serviceWorker" in navigator && location.protocol !== "file:") {
   let reloading = false;
   navigator.serviceWorker.addEventListener("controllerchange", () => {
@@ -892,7 +895,8 @@ if ("serviceWorker" in navigator && location.protocol !== "file:") {
         installing?.addEventListener("statechange", () => {
           if (installing.state !== "installed") return;
           if (navigator.serviceWorker.controller) offerUpdate(registration);
-          else toast("PDF Studio now works offline.");
+          else
+            toast("PDF Studio now works offline.", install.canPrompt ? { action: { label: "Install", run: () => $("install").click() } } : {});
         });
       });
     })

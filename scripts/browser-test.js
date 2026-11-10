@@ -79,6 +79,23 @@ try {
   assert.equal(await page.locator("#empty").isVisible(), true);
   await page.screenshot({ path: join(DOCS, "screenshot-empty.png") });
 
+  step("install: the browser's own prompt when it offers one, otherwise the dialog");
+  assert.equal(await page.locator("#install").isVisible(), true);
+  await page.evaluate(() => {
+    const event = new Event("beforeinstallprompt", { cancelable: true });
+    event.prompt = () => (window.prompted = true);
+    event.userChoice = Promise.resolve({ outcome: "accepted" });
+    dispatchEvent(event);
+  });
+  await page.click("#install");
+  assert.equal(await page.evaluate(() => window.prompted), true, "native prompt shown");
+  assert.equal(await page.locator("#install-dialog").isVisible(), false);
+  await page.click("#install"); // the prompt is used up: now the dialog explains the steps
+  await page.waitForSelector('#install-dialog [data-offline-status][data-state="ready"]');
+  assert.match(await page.locator("[data-install-steps]").textContent(), /Install PDF Studio/);
+  await page.click('#install-dialog .dialog-actions button');
+  assert.equal(await page.locator("#install-dialog").isVisible(), false);
+
   step("upload report.pdf");
   await page.setInputFiles("#file-input", files.report);
   await waitForPreviews(4);
@@ -188,6 +205,11 @@ try {
   assert.equal(offline.name, "report-edited.pdf");
   assert.deepEqual(offline.pages.map((p) => p.width), [200, 220, 230]);
   await context.setOffline(false);
+
+  step("after installing, the button disappears");
+  await page.evaluate(() => dispatchEvent(new Event("appinstalled")));
+  assert.equal(await page.locator("#install").isVisible(), false);
+  assert.match(await lastToast().textContent(), /installed/);
 
   assert.deepEqual(problems, [], "no errors in the console");
   console.log("\nBrowser test passed. Screenshots in docs/.");

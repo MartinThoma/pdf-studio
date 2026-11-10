@@ -437,6 +437,17 @@ dialog h2 { margin: 8px 0; font-size: 17px; }
 dialog dl { display: grid; grid-template-columns: auto 1fr; gap: 9px 18px; margin: 8px 0 0; font-size: 14px; }
 dialog dt { white-space: nowrap; color: var(--muted); }
 dialog dd { margin: 0; }
+dialog p { margin: 10px 0 0; font-size: 14px; }
+dialog h3 { margin: 18px 0 0; font-size: 14px; }
+dialog b { font-weight: 650; }
+.offline-status { display: flex; align-items: center; gap: 8px; padding: 9px 12px; border-radius: 8px; background: var(--surface-2); font-weight: 500; }
+.offline-status svg { width: 18px; height: 18px; color: var(--muted); }
+.offline-status[data-state="ready"] { background: var(--accent-soft); color: var(--accent); }
+.offline-status[data-state="ready"] svg { color: var(--accent); }
+.offline-status[data-state="pending"] svg { animation: pulse 900ms ease-in-out infinite alternate; }
+.offline-status[data-state="unavailable"] { background: var(--danger-soft); color: var(--danger); }
+.offline-status[data-state="unavailable"] svg { display: none; }
+.dialog-actions { display: flex; justify-content: flex-end; margin-top: 20px; }
 dialog .hint { margin: 18px 0 0; padding-top: 14px; border-top: 1px solid var(--border); color: var(--muted); font-size: 13px; }
 
 /* Small screens */
@@ -446,6 +457,7 @@ dialog .hint { margin: 18px 0 0; padding-top: 14px; border-top: 1px solid var(--
   .actions .button { width: 40px; padding: 0; }
   .actions .button.primary { width: auto; padding: 0 12px; }
   .brand span { display: none; }
+  #help { display: none; } /* keyboard shortcuts: hardly useful on a phone, and the bar is full */
   .divider { display: none; }
   .size-control { display: none; }
   .selection-actions .label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }

@@ -27,6 +27,7 @@
     <symbol id="i-rotate-right" viewBox="0 0 24 24"><path d="M19.5 4.5v5h-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M18.7 14.5A7.5 7.5 0 1 1 17.4 7l2.1 2.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
     <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4.5 6.5h15M9.5 6.5V4.8c0-.7.6-1.3 1.3-1.3h2.4c.7 0 1.3.6 1.3 1.3v1.7M6.5 6.5l.8 12.1c.1 1 .9 1.9 2 1.9h5.4c1.1 0 1.9-.9 2-1.9l.8-12.1M10 10.5v6M14 10.5v6" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></symbol>
     <symbol id="i-close" viewBox="0 0 24 24"><path d="m6.5 6.5 11 11m0-11-11 11" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+    <symbol id="i-install" viewBox="0 0 24 24"><rect x="3.5" y="4" width="17" height="12.5" rx="2" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M8.5 20h7M12 7v6m-2.5-2.5L12 13l2.5-2.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></symbol>
     <symbol id="i-check" viewBox="0 0 24 24"><path d="m5.5 12.5 4 4 9-9" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
     <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M9.6 9.6a2.5 2.5 0 1 1 3.4 2.3c-.6.3-1 .8-1 1.5v.4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><circle cx="12" cy="16.9" r="1" fill="currentColor"/></symbol>
     <symbol id="i-file" viewBox="0 0 48 48"><path d="M14 6h15l9 9v25a3 3 0 0 1-3 3H14a3 3 0 0 1-3-3V9a3 3 0 0 1 3-3Z" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round"/><path d="M29 6v9h9M24 21v13m-5.5-5.5L24 34l5.5-5.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
@@ -50,6 +51,9 @@
       </button>
       <button type="button" class="button primary" id="download" disabled title="Download the edited PDF (Ctrl+S)">
         <svg aria-hidden="true"><use href="#i-download"/></svg><span class="label">Download</span>
+      </button>
+      <button type="button" class="button ghost" id="install" title="Install PDF Studio as an app that works offline">
+        <svg aria-hidden="true"><use href="#i-install"/></svg><span class="label">Install</span>
       </button>
       <button type="button" class="button icon-only ghost" id="help" title="Keyboard shortcuts">
         <svg aria-hidden="true"><use href="#i-help"/></svg><span class="label">Keyboard shortcuts</span>
@@ -110,6 +114,20 @@
 
   <div class="toasts" id="toasts" role="status" aria-live="polite"></div>
   <div class="visually-hidden" id="announcer" aria-live="assertive"></div>
+
+  <dialog id="install-dialog" aria-labelledby="install-title">
+    <form method="dialog">
+      <header>
+        <h2 id="install-title">Install PDF Studio</h2>
+        <button class="button ghost icon-only" value="close" title="Close"><svg aria-hidden="true"><use href="#i-close"/></svg><span class="label">Close</span></button>
+      </header>
+      <p>Installed, PDF Studio opens in its own window like any other app and works without an internet connection. Your files still never leave this device.</p>
+      <p class="offline-status" data-offline-status data-state="pending"><svg aria-hidden="true"><use href="#i-check"/></svg><span></span></p>
+      <h3>How to install</h3>
+      <p data-install-steps></p>
+      <div class="dialog-actions"><button class="button primary" value="close">Got it</button></div>
+    </form>
+  </dialog>
 
   <dialog id="shortcuts" aria-labelledby="shortcuts-title">
     <form method="dialog">

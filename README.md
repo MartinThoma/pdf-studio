@@ -17,6 +17,9 @@ After the first visit it works offline, and it can be installed as an app.
   rotate, <kbd>Del</kbd> to delete, <kbd>Ctrl</kbd>+<kbd>Z</kbd> to undo, <kbd>?</kbd> for all
   shortcuts.
 - **Touch screens**: tap to select, press and hold to drag.
+- **Install** as an app (button in the top bar): opens in its own window and works without
+  internet. Chrome, Edge and Android show their install prompt; on Safari and Firefox the button
+  explains the steps.
 - Light and dark mode, phone to desktop.
 
 ## Privacy
