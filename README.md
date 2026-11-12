@@ -28,13 +28,22 @@ After the first visit it works offline, and it can be installed as an app.
 - **Install** as an app (button in the top bar): opens in its own window and works without
   internet. Chrome, Edge and Android show their install prompt; on Safari and Firefox the button
   explains the steps.
+- **Version and updates**: the *Install* button (called *Version* once installed, *Update* when
+  there is a newer one) shows which version runs and whether it is the latest, with *Update now*.
+  A new version is fetched on every start, when the window comes back to the front and hourly;
+  it is switched to right away while no PDF is open, otherwise when you say so.
+- **Developer options** (a checkbox at the bottom of the <kbd>?</kbd> dialog): a selected object
+  shows how it is written in the PDF: the operator in the content stream with its font or image
+  object, the annotation dictionary, or the annotation a mark will become.
 - Light and dark mode, phone to desktop.
 
 ## Privacy marks
 
 In the Details view, pick *Mark private* (<kbd>P</kbd>), choose what it is (name, address, email /
 phone, ID / number, other) and drag over the text. The marked text is read from the page; if there
-is none (a scan) type it into the list on the right. Every mark also has a comment field there. Marks are saved with the PDF as standard
+is none (a scan) type it in on the right. A new or selected mark shows its fields there: colour or
+category, text and a comment. The options of a tool (highlight colours, category) show in the bar
+while that tool is in use. Marks are saved with the PDF as standard
 highlight annotations, so every viewer shows them, and in the list as JSON (*Privacy list*), so a
 pseudonymizing tool does not have to read the PDF at all.
 

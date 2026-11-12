@@ -389,6 +389,8 @@ export function interpret(operators, page) {
         matrix: mul([text.size * text.scale, 0, 0, text.size, 0, text.rise], matrix),
         paint: `${fill}${text.mode ? ` ${text.mode} Tr` : ""}`,
         baseFont: font.baseFont ?? "",
+        fontResource: text.fontResource ?? "",
+        size: text.size,
       });
     }
     tm = mul([1, 0, 0, 1, advance, 0], tm);
@@ -419,6 +421,7 @@ export function interpret(operators, page) {
       case "Tf": {
         const fontName = operands.find((operand) => operand?.name !== undefined)?.name;
         text.font = fontName === undefined ? null : fontOf(fontName);
+        text.fontResource = fontName ?? "";
         text.size = numbers(operands, 1)?.[0] ?? 0;
         break;
       }
@@ -643,4 +646,76 @@ export async function rewritePage(page, { removed = [], edits = {} }, embed) {
     const keep = annots.asArray().filter((entry, i) => !annotIndices.has(i) && !(entry instanceof PDFRef && popups.has(entry.tag)));
     page.node.set(name("Annots"), context.obj(keep));
   }
+}
+
+// ---------------------------------------------------------------------------------------------
+// For developers: how an object is written in the file
+
+const LIMIT = 6000;
+const shorten = (text) => (text.length > LIMIT ? `${text.slice(0, LIMIT)}\n% … ${text.length - LIMIT} more characters` : text);
+
+/** Bytes of a content stream as text; what is not printable becomes an octal escape. */
+function printable(bytes) {
+  let out = "";
+  for (const byte of bytes) {
+    out += byte === 10 || byte === 13 || (byte >= 32 && byte < 127) ? String.fromCharCode(byte) : `\\${byte.toString(8).padStart(3, "0")}`;
+  }
+  return out;
+}
+
+/** An object of the file as PDF source: "12 0 obj … endobj" for indirect objects. */
+function objectSource(entry, context) {
+  const object = entry instanceof PDFRef ? context.lookup(entry) : entry;
+  if (!object) return "% (missing)";
+  let body;
+  if (object instanceof PDFStream) {
+    const length = object.contents?.length ?? object.getContentsSize?.() ?? 0;
+    body = `${object.dict.toString()}\nstream\n% … ${length} bytes\nendstream`;
+  } else body = object.toString();
+  body = shorten(body);
+  return entry instanceof PDFRef ? `${entry.objectNumber} ${entry.generationNumber} obj\n${body}\nendobj` : body;
+}
+
+/**
+ * The PDF source of an object of the page (ids as in pageObjects): the operator in the content
+ * stream with the state it is drawn in and the font or image it uses, or the annotation.
+ */
+export function inspectObject(page, id) {
+  const { context } = page.doc;
+  const n = Number(id.slice(1));
+  if (id[0] === "a") {
+    const annots = page.node.lookup(name("Annots"));
+    const entry = annots instanceof PDFArray ? annots.get(n) : null;
+    if (!entry) return "% Not found.";
+    return `% Entry ${n} of the page's /Annots\n${objectSource(entry, context)}`;
+  }
+  const bytes = contentBytes(page);
+  const operators = readOperators(bytes);
+  const operator = operators[n];
+  if (id[0] !== "c" || !operator) return "% Not found.";
+  const object = interpret(operators, page).find((found) => found.index === n);
+  const resources = page.node.lookup(name("Resources"));
+  const resource = (kind, key) => {
+    const dict = resources instanceof PDFDict ? resources.lookup(name(kind)) : null;
+    return dict instanceof PDFDict ? dict.get(name(key)) : null;
+  };
+  const lines = [
+    `% Content stream of the page: operator ${n + 1} of ${operators.length}, bytes ${operator.start}–${operator.end}`,
+    shorten(printable(bytes.subarray(operator.start, operator.end))),
+  ];
+  if (object?.type === "text") {
+    lines.push(
+      "",
+      `% Text state: /${object.fontResource} ${object.size} Tf, colour and mode: ${object.paint}`,
+      `% Matrix from text space (1 = font size) to the page: [${object.matrix.map((m) => Number(m.toFixed(4))).join(" ")}]`,
+    );
+    const font = resource("Font", object.fontResource);
+    if (font) lines.push("", `% Font /${object.fontResource}`, objectSource(font, context));
+  } else if (object?.xobject !== undefined) {
+    const xobject = resource("XObject", object.xobject);
+    const corners = object.points.map(([x, y]) => `(${x.toFixed(1)}, ${y.toFixed(1)})`).join(" ");
+    lines.push("", `% Drawn with the corners ${corners}`);
+    if (xobject) lines.push("", `% XObject /${object.xobject}`, objectSource(xobject, context));
+  }
+  return lines.join("\n");
 }

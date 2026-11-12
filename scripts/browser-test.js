@@ -81,7 +81,7 @@ try {
   assert.equal(await page.locator("#empty").isVisible(), true);
   await page.screenshot({ path: join(DOCS, "screenshot-empty.png") });
 
-  step("install: the browser's own prompt when it offers one, otherwise the dialog");
+  step("version and install dialog");
   assert.equal(await page.locator("#install").isVisible(), true);
   await page.evaluate(() => {
     const event = new Event("beforeinstallprompt", { cancelable: true });
@@ -90,9 +90,13 @@ try {
     dispatchEvent(event);
   });
   await page.click("#install");
+  await page.waitForSelector('#install-dialog [data-version-status][data-state="latest"]');
+  const appVersion = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8")).version;
+  const shownVersion = await page.locator("[data-version-current]").textContent();
+  assert.ok(shownVersion.startsWith(`${appVersion} (build `), shownVersion);
+  await page.click("[data-install-now]");
   assert.equal(await page.evaluate(() => window.prompted), true, "native prompt shown");
-  assert.equal(await page.locator("#install-dialog").isVisible(), false);
-  await page.click("#install"); // the prompt is used up: now the dialog explains the steps
+  assert.equal(await page.locator("[data-install-now]").isVisible(), false, "the prompt is used up");
   await page.waitForSelector('#install-dialog [data-offline-status][data-state="ready"]');
   assert.match(await page.locator("[data-install-steps]").textContent(), /Install PDF Studio/);
   await page.click('#install-dialog .dialog-actions button');
@@ -222,23 +226,29 @@ try {
     await page.mouse.up();
   };
   await drag([0.04, 0.42], [0.8, 0.56]);
-  await page.waitForSelector(".mark-row.private");
-  assert.equal(await page.locator('.mark-row.private input[aria-label="Text under the mark"]').inputValue(), "Report 4");
-  assert.match(await page.locator(".mark-row .token").textContent(), /\[NAME_1\]/);
-  await page.locator('.mark-row.private input[aria-label="Comment"]').fill("the patient");
-  await page.locator('.mark-row.private input[aria-label="Comment"]').press("Enter");
+  // The new mark is selected: its fields are on the right.
+  await page.waitForSelector("#pick-mark .mark-edit.private");
+  assert.match(await page.locator("#pick-what").textContent(), /Private mark on page 2/);
+  assert.equal(await page.locator('#pick-mark [data-field="text"]').inputValue(), "Report 4");
+  assert.match(await page.locator("#pick-mark .token").textContent(), /\[NAME_1\]/);
+  await page.locator('#pick-mark [data-field="comment"]').fill("the patient");
+  await page.locator('#pick-mark [data-field="comment"]').press("Enter");
+  assert.equal(await page.locator("#highlight-colors").isVisible(), false, "colours only show with the highlight tool");
   await page.keyboard.press("h");
+  assert.equal(await page.locator("#highlight-colors").isVisible(), true);
+  assert.equal(await page.locator("#category-control").isVisible(), false);
   await drag([0.04, 0.05], [0.5, 0.12]); // the coloured band, no text
-  await page.waitForSelector(".mark-row.is-current:not(.private)");
+  await page.waitForSelector("#pick-mark .mark-edit.highlight");
   assert.equal(await page.locator(".mark-row").count(), 2);
-  await page.locator('.mark-row:not(.private) .swatch[data-color="green"]').click();
+  await page.locator('#pick-mark .swatch[data-color="green"]').click();
   assert.equal(await page.evaluate(() => window.pdfStudio.pages()[1].marks[1].color), "green");
   await page.keyboard.press("Control+z");
   assert.equal(await page.evaluate(() => window.pdfStudio.pages()[1].marks[1].color), "yellow");
-  assert.match(await page.locator("#shortcuts [data-version]").textContent(), /^Version \d+\.\d+\.\d+$/);
-  await page.locator(".mark-row.private select").selectOption("address");
-  assert.match(await page.locator(".mark-row .token").first().textContent(), /\[ADDRESS_1\]/);
-  await page.locator(".mark-row.private select").selectOption("name");
+  assert.match(await page.locator("#shortcuts [data-version]").textContent(), /^Version \d+\.\d+\.\d+( \(build [0-9a-f]{7}\))?$/);
+  await page.locator(".mark-row.private").click(); // the list selects a mark
+  await page.locator("#pick-mark select").selectOption("address");
+  assert.match(await page.locator(".mark-row.private .kind").textContent(), /\[ADDRESS_1\]/);
+  await page.locator("#pick-mark select").selectOption("name");
   await page.keyboard.press("Escape");
   assert.equal(await page.locator("#tool-highlight").getAttribute("aria-pressed"), "false");
   await page.waitForTimeout(400);
@@ -282,6 +292,11 @@ try {
   await page.mouse.click(...spot);
   await page.waitForSelector("#pick-panel:not([hidden])");
   assert.match(await page.locator("#pick-what").textContent(), /Text on page 5/);
+  assert.equal(await page.locator("#pick-source").isVisible(), false, "PDF source is a developer option");
+  await page.evaluate(() => document.getElementById("dev-options").click());
+  await page.waitForFunction(() => /Tj[^]*% Font \//.test(document.getElementById("pick-source-text").textContent));
+  await page.evaluate(() => document.getElementById("dev-options").click());
+  assert.equal(await page.locator("#pick-source").isVisible(), false);
   await page.waitForFunction(() => document.getElementById("pick-text").value === "Appendix 1");
   await page.fill("#pick-text", "Changed");
   await page.keyboard.press("Enter");
@@ -380,10 +395,29 @@ try {
   assert.deepEqual(offline.pages.map((p) => p.width), [200, 220, 230]);
   await context.setOffline(false);
 
-  step("after installing, the button disappears");
+  step("after installing, the button stays for the version");
   await page.evaluate(() => dispatchEvent(new Event("appinstalled")));
-  assert.equal(await page.locator("#install").isVisible(), false);
   assert.match(await lastToast().textContent(), /installed/);
+  assert.equal((await page.locator("#install .label").textContent()).trim(), "Version");
+
+  step("a new version on the server: the button says so, Update now loads it");
+  const manifestPath = join(ROOT, "asset-manifest.js");
+  const realManifest = readFileSync(manifestPath, "utf8");
+  try {
+    writeFileSync(manifestPath, realManifest.replace(/"version": "[0-9a-f]+"/, '"version": "feedfeedfeed"'));
+    await page.click("#install");
+    await page.waitForSelector('#install-dialog [data-version-status][data-state="outdated"]');
+    assert.match(await page.locator("[data-version-status]").textContent(), /newer version/);
+    assert.equal((await page.locator("#install .label").textContent()).trim(), "Update");
+    assert.equal((await order()).length, 3, "work is open, so nothing reloads by itself");
+    await Promise.all([page.waitForEvent("load"), page.click("[data-update-now]")]);
+    await page.waitForFunction(() => navigator.serviceWorker.controller !== null);
+    await page.click("#install");
+    await page.waitForSelector('#install-dialog [data-version-status][data-state="latest"]');
+    assert.match(await page.locator("[data-version-current]").textContent(), /build feedfee/);
+  } finally {
+    writeFileSync(manifestPath, realManifest);
+  }
 
   assert.deepEqual(problems, [], "no errors in the console");
   console.log("\nBrowser test passed. Screenshots in docs/.");

@@ -126,43 +126,56 @@ function addMarks(out, page, marks, names, sourcePage) {
     page.node.set(PDFName.of("Annots"), annots);
   }
   for (const mark of marks) {
-    const rects = mark.rects.map((rect) => toPdfRect(rect, box, rotation));
-    const union = [
-      Math.min(...rects.map((r) => r[0])),
-      Math.min(...rects.map((r) => r[1])),
-      Math.max(...rects.map((r) => r[2])),
-      Math.max(...rects.map((r) => r[3])),
-    ];
-    const isPrivate = mark.kind === "private";
-    const dict = context.obj({
-      Type: "Annot",
-      Subtype: "Highlight",
-      Rect: union,
-      // Top-left, top-right, bottom-left, bottom-right: the order viewers actually read.
-      QuadPoints: rects.flatMap(([x0, y0, x1, y1]) => [x0, y1, x1, y1, x0, y0, x1, y0]),
-      C: mark.kind === "private" ? PRIVATE_COLOR : colorOf(mark.color).rgb,
-      CA: isPrivate ? 0.55 : 0.5,
-      F: 4,
-    });
-    dict.set(PDFName.of("NM"), PDFHexString.fromText(mark.id));
-    dict.set(PDFName.of("T"), PDFHexString.fromText("PDF Studio"));
-    dict.set(PDFName.of("Subj"), PDFHexString.fromText(isPrivate ? `Privacy: ${categoryOf(mark.category).label}` : "Highlight"));
-    // Viewers show /Contents as the note: for a highlight that is the comment, for a private mark
-    // it stays the marked text, which is what tools look for.
-    const contents = isPrivate ? mark.text : mark.comment || mark.text;
-    if (contents) dict.set(PDFName.of("Contents"), PDFHexString.fromText(contents));
-    if (isPrivate || mark.comment) {
-      const info = context.obj({ Kind: isPrivate ? "Privacy" : "Highlight" });
-      if (mark.comment) info.set(PDFName.of("Comment"), PDFHexString.fromText(mark.comment));
-      if (isPrivate) {
-        info.set(PDFName.of("Category"), PDFHexString.fromText(mark.category));
-        info.set(PDFName.of("Placeholder"), PDFHexString.fromText(names.get(mark.id)));
-        info.set(PDFName.of("Id"), PDFHexString.fromText(mark.id));
-      }
-      dict.set(PDFName.of("PdfStudio"), info);
-    }
+    const dict = markDict(context, mark, names.get(mark.id), box, rotation);
     annots.push(context.register(dict));
   }
+}
+
+/** The annotation dictionary of a mark; `box` and `rotation` are those of the page it is on. */
+function markDict(context, mark, placeholder, box, rotation) {
+  const rects = mark.rects.map((rect) => toPdfRect(rect, box, rotation));
+  const union = [
+    Math.min(...rects.map((r) => r[0])),
+    Math.min(...rects.map((r) => r[1])),
+    Math.max(...rects.map((r) => r[2])),
+    Math.max(...rects.map((r) => r[3])),
+  ];
+  const isPrivate = mark.kind === "private";
+  const dict = context.obj({
+    Type: "Annot",
+    Subtype: "Highlight",
+    Rect: union,
+    // Top-left, top-right, bottom-left, bottom-right: the order viewers actually read.
+    QuadPoints: rects.flatMap(([x0, y0, x1, y1]) => [x0, y1, x1, y1, x0, y0, x1, y0]),
+    C: mark.kind === "private" ? PRIVATE_COLOR : colorOf(mark.color).rgb,
+    CA: isPrivate ? 0.55 : 0.5,
+    F: 4,
+  });
+  dict.set(PDFName.of("NM"), PDFHexString.fromText(mark.id));
+  dict.set(PDFName.of("T"), PDFHexString.fromText("PDF Studio"));
+  dict.set(PDFName.of("Subj"), PDFHexString.fromText(isPrivate ? `Privacy: ${categoryOf(mark.category).label}` : "Highlight"));
+  // Viewers show /Contents as the note: for a highlight that is the comment, for a private mark
+  // it stays the marked text, which is what tools look for.
+  const contents = isPrivate ? mark.text : mark.comment || mark.text;
+  if (contents) dict.set(PDFName.of("Contents"), PDFHexString.fromText(contents));
+  if (isPrivate || mark.comment) {
+    const info = context.obj({ Kind: isPrivate ? "Privacy" : "Highlight" });
+    if (mark.comment) info.set(PDFName.of("Comment"), PDFHexString.fromText(mark.comment));
+    if (isPrivate) {
+      info.set(PDFName.of("Category"), PDFHexString.fromText(mark.category));
+      info.set(PDFName.of("Placeholder"), PDFHexString.fromText(placeholder));
+      info.set(PDFName.of("Id"), PDFHexString.fromText(mark.id));
+    }
+    dict.set(PDFName.of("PdfStudio"), info);
+  }
+  return dict;
+}
+
+/** For developers: the annotation a mark becomes in the saved file, as PDF source. */
+export async function markSource(mark, placeholder, sourcePage) {
+  const { context } = await PDFDocument.create();
+  const dict = markDict(context, mark, placeholder ?? "", sourcePage.getCropBox(), sourcePage.getRotation().angle);
+  return `% Added to the page's /Annots when the PDF is saved\n${dict.toString()}`;
 }
 
 /** Removes references between pages of a source document (see the comment on top). */

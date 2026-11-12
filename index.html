@@ -61,7 +61,7 @@
       <button type="button" class="button primary" id="download" disabled title="Download the edited PDF (Ctrl+S)">
         <svg aria-hidden="true"><use href="#i-download"/></svg><span class="label">Download</span>
       </button>
-      <button type="button" class="button ghost" id="install" title="Install PDF Studio as an app that works offline">
+      <button type="button" class="button ghost" id="install" title="Install PDF Studio; version">
         <svg aria-hidden="true"><use href="#i-install"/></svg><span class="label">Install</span>
       </button>
       <button type="button" class="button icon-only ghost" id="help" title="Keyboard shortcuts">
@@ -141,11 +141,11 @@
             <button type="button" class="button small tool" id="tool-highlight" aria-pressed="false" title="Highlight: drag over text (H)">
               <svg aria-hidden="true"><use href="#i-highlight"/></svg><span class="label">Highlight</span>
             </button>
-            <div class="swatches" id="highlight-colors" role="group" aria-label="Colour of the next highlight"></div>
+            <div class="swatches" id="highlight-colors" hidden role="group" aria-label="Colour of the next highlight"></div>
             <button type="button" class="button small tool private" id="tool-private" aria-pressed="false" title="Mark as private: drag over a name or other personal data (P)">
               <svg aria-hidden="true"><use href="#i-shield"/></svg><span class="label">Mark private</span>
             </button>
-            <label class="category" title="What the next private mark is">
+            <label class="category" id="category-control" hidden title="What the next private mark is">
               <span class="visually-hidden">Category of private marks</span>
               <select id="private-category"></select>
             </label>
@@ -166,6 +166,11 @@
             <button type="button" class="button small" id="pick-apply">Change text</button>
             <p class="note">The new text is set in a standard font at the same place and size, so it can look a little different.</p>
           </div>
+          <div id="pick-mark" hidden></div>
+          <details class="pick-source" id="pick-source" hidden open>
+            <summary>PDF source</summary>
+            <pre id="pick-source-text" tabindex="0"></pre>
+          </details>
           <button type="button" class="button small danger" id="pick-delete" title="Delete what is selected (Del)">
             <svg aria-hidden="true"><use href="#i-trash"/></svg><span class="label">Delete</span>
           </button>
@@ -195,14 +200,24 @@
   <dialog id="install-dialog" aria-labelledby="install-title">
     <form method="dialog">
       <header>
-        <h2 id="install-title">Install PDF Studio</h2>
+        <h2 id="install-title">PDF Studio</h2>
         <button class="button ghost icon-only" value="close" title="Close"><svg aria-hidden="true"><use href="#i-close"/></svg><span class="label">Close</span></button>
       </header>
-      <p>Installed, PDF Studio opens in its own window like any other app and works without an internet connection. Your files still never leave this device.</p>
+      <h3>Version</h3>
+      <p>This is version <b data-version-current></b>.</p>
+      <p class="offline-status version-status" data-version-status data-state="checking"><svg aria-hidden="true"><use href="#i-check"/></svg><span></span></p>
+      <div class="version-actions">
+        <button type="button" class="button small primary" data-update-now hidden>Update now</button>
+        <button type="button" class="button small" data-check-again>Check again</button>
+      </div>
+      <div data-install-section>
+        <h3>Install</h3>
+        <p>Installed, PDF Studio opens in its own window like any other app and works without an internet connection. Your files still never leave this device.</p>
+        <p><button type="button" class="button small primary" data-install-now hidden>Install now</button></p>
+        <p data-install-steps></p>
+      </div>
       <p class="offline-status" data-offline-status data-state="pending"><svg aria-hidden="true"><use href="#i-check"/></svg><span></span></p>
-      <h3>How to install</h3>
-      <p data-install-steps></p>
-      <div class="dialog-actions"><button class="button primary" value="close">Got it</button></div>
+      <div class="dialog-actions"><button class="button" value="close">Close</button></div>
     </form>
   </dialog>
 
@@ -231,6 +246,10 @@
         <dt>Details: <kbd>R</kbd> / <kbd>Shift</kbd> + <kbd>R</kbd></dt><dd>Rotate the page right / left</dd>
       </dl>
       <p class="hint">In the Details view, drag over text with the Highlight or Mark private tool. Private marks are saved in the PDF as annotations that pseudonymizing tools can find, and the Privacy list button saves them as JSON. With the mouse: drag pages to reorder them. <kbd>Ctrl</kbd>-click or <kbd>Shift</kbd>-click selects several. On a touch screen, tap to select and press and hold to drag.</p>
+      <label class="dev-toggle">
+        <input type="checkbox" id="dev-options">
+        <span>Developer options: show how a selected object is written in the PDF</span>
+      </label>
       <p class="hint version" data-version></p>
     </form>
   </dialog>

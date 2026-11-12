@@ -1,6 +1,6 @@
 {
   "name": "pdf-studio",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "description": "Rearrange, rotate and delete PDF pages in the browser. Offline-first static web app; files never leave the device.",
   "type": "module",

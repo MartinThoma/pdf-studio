@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { PDFArray, PDFDocument, PDFName, StandardFonts, rgb } from "../vendor/pdf-lib/pdf-lib.esm.min.js";
 import { assemble, loadSource } from "../src/assemble.js";
-import { contentBytes, pageObjects, readOperators } from "../src/content.js";
+import { contentBytes, inspectObject, pageObjects, readOperators } from "../src/content.js";
 
 const latin1 = (bytes) => new TextDecoder("latin1").decode(bytes);
 
@@ -128,4 +128,18 @@ test("text after a deleted run keeps its place", async () => {
   const bytes = await assemble(new Map([["a", source]]), [{ sourceId: "a", index: 0, rotation: 0, removed: [first.id] }]);
   const [left] = pageObjects((await PDFDocument.load(bytes)).getPage(0));
   near(left.box, second.box, 0.0005);
+});
+
+test("inspectObject shows how an object is written in the file", async () => {
+  const doc = await sample();
+  const page = doc.getPage(0);
+  const [jane, , image, link] = pageObjects(page);
+  const text = inspectObject(page, jane.id);
+  assert.match(text, /Tj/);
+  assert.match(text, /% Font \/\S+\n\d+ 0 obj\n<<[^]*\/BaseFont \/Helvetica/);
+  const picture = inspectObject(page, image.id);
+  assert.match(picture, /Do/);
+  assert.match(picture, /\/Subtype \/Image[^]*stream\n% … \d+ bytes/);
+  assert.match(inspectObject(page, link.id), /\d+ 0 obj\n<<[^]*\/Subtype \/Link[^]*endobj/);
+  assert.equal(inspectObject(page, "c9999"), "% Not found.");
 });

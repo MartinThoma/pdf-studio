@@ -5,6 +5,7 @@ import {
   History, addMark, editText, erase, insert, move, newMarkId, normalizeRotation, pagesOf, remove, removeMark, rotate, updateMark,
 } from "./model.js";
 import { setupInstall } from "./install.js";
+import { describeVersion, setupUpdates } from "./update.js";
 import { VERSION } from "./version.js";
 import { PreviewRenderer, drawPage, openPreviewDocument, pageText } from "./thumbnails.js";
 import { PdfWorker } from "./worker-client.js";
@@ -40,6 +41,10 @@ const ui = {
   pickWhat: $("pick-what"),
   pickTextRow: $("pick-text-row"),
   pickText: $("pick-text"),
+  pickMark: $("pick-mark"),
+  pickSource: $("pick-source"),
+  pickSourceText: $("pick-source-text"),
+  devOptions: $("dev-options"),
   markItems: $("mark-items"),
   markNone: $("mark-none"),
   category: $("private-category"),
@@ -71,7 +76,8 @@ const state = {
   detailId: null, // the page shown in the details view
   tool: "select", // "select" | "highlight" | "private"
   highlightColor: HIGHLIGHT_COLORS[0].id, // for the next highlight
-  picked: null, // objects picked with the select tool: { pageId, ids }
+  picked: null,
+  developer: false, // developer options (in the shortcuts dialog) // objects picked with the select tool: { pageId, ids }
   markId: null, // the mark picked in the details view
 };
 const cards = new Map(); // page id → <li>
@@ -1052,6 +1058,9 @@ function setTool(tool) {
     $(`tool-${name}`).setAttribute("aria-pressed", String(state.tool === name));
   }
   ui.stage.classList.toggle("tooling", state.tool !== "select");
+  // The options of a tool show while that tool is in use.
+  $("highlight-colors").hidden = state.tool !== "highlight";
+  $("category-control").hidden = state.tool !== "private";
   hideObjectHover();
   if (state.tool === "select") for (const item of detail.sheets.values()) if (item._visible && item._page) objectsOf(item._page);
   ui.toolHint.textContent =
@@ -1235,6 +1244,7 @@ addEventListener(
   { passive: true },
 );
 
+/** The marks of the page as a short list; a click selects a mark, which opens its editor above. */
 function renderMarkList(page) {
   const marks = page.marks ?? [];
   ui.markNone.hidden = marks.length > 0;
@@ -1242,62 +1252,77 @@ function renderMarkList(page) {
   ui.markItems.replaceChildren(
     ...marks.map((mark) => {
       const row = document.createElement("li");
-      row.className = `mark-row ${mark.kind}${mark.id === state.markId ? " is-current" : ""}`;
-      row.dataset.mark = mark.id;
-      const head = document.createElement("div");
-      head.className = "head";
-      const label = document.createElement("span");
-      label.textContent = mark.kind === "private" ? "Private" : "Highlight";
-      head.append(label);
-      if (mark.kind === "highlight") {
-        row.style.setProperty("--mark", cssColor(mark.color));
-        head.append(
-          swatches(mark.color, (color) => commit(updateMark(pages(), page.id, mark.id, { color }), { animate: false }), "Colour of this highlight"),
-        );
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = `mark-row ${mark.kind}${mark.id === state.markId ? " is-current" : ""}`;
+      button.dataset.mark = mark.id;
+      if (mark.kind === "highlight") button.style.setProperty("--mark", cssColor(mark.color));
+      const kind = document.createElement("span");
+      kind.className = "kind";
+      kind.textContent = mark.kind === "private" ? (names.get(mark.id) ?? "Private") : "Highlight";
+      const text = document.createElement("span");
+      text.className = "text";
+      text.textContent = mark.text || mark.comment || "(no text)";
+      button.append(kind, text);
+      if (mark.comment && mark.text) {
+        const comment = document.createElement("span");
+        comment.className = "comment";
+        comment.textContent = mark.comment;
+        button.append(comment);
       }
-      if (mark.kind === "private") {
-        const select = document.createElement("select");
-        select.setAttribute("aria-label", "Category");
-        for (const category of CATEGORIES) select.append(new Option(category.label, category.id));
-        select.value = categoryOf(mark.category).id;
-        select.addEventListener("change", () => commit(updateMark(pages(), page.id, mark.id, { category: select.value }), { animate: false }));
-        const token = document.createElement("span");
-        token.className = "token";
-        token.textContent = names.get(mark.id) ?? "";
-        head.append(select, token);
-      }
-      const remove = document.createElement("button");
-      remove.type = "button";
-      remove.className = "button small ghost icon-only danger";
-      remove.title = "Remove this mark";
-      remove.innerHTML = '<svg aria-hidden="true"><use href="#i-trash"/></svg>';
-      remove.addEventListener("click", () => deleteMark(page.id, mark.id));
-      head.append(remove);
-      const input = document.createElement("input");
-      input.type = "text";
-      input.value = mark.text;
-      input.placeholder = "No text found: type it here";
-      input.setAttribute("aria-label", "Text under the mark");
-      input.title = "Text under the mark";
-      input.addEventListener("change", () => {
-        commit(updateMark(pages(), page.id, mark.id, { text: input.value.trim() }), { animate: false });
-      });
-      const comment = document.createElement("input");
-      comment.type = "text";
-      comment.value = mark.comment ?? "";
-      comment.placeholder = "Add a comment";
-      comment.setAttribute("aria-label", "Comment");
-      comment.addEventListener("change", () => {
-        commit(updateMark(pages(), page.id, mark.id, { comment: comment.value.trim() }), { animate: false });
-      });
-      row.append(head, input, comment);
-      row.addEventListener("click", (event) => {
-        if (event.target.closest("button, input, select")) return;
-        pick({ pageId: page.id, ids: [`m:${mark.id}`] });
-      });
+      button.addEventListener("click", () => pick({ pageId: page.id, ids: [`m:${mark.id}`] }));
+      row.append(button);
       return row;
     }),
   );
+}
+
+/** The fields of one mark, shown on the right while that mark is selected. */
+function markEditor(page, mark) {
+  const editor = document.createElement("div");
+  editor.className = `mark-edit ${mark.kind}`;
+  const change = (changes) => commit(updateMark(pages(), page.id, mark.id, changes), { animate: false });
+  const field = (labelText, control) => {
+    const label = document.createElement("label");
+    const caption = document.createElement("span");
+    caption.textContent = labelText;
+    label.append(caption, control);
+    return label;
+  };
+  if (mark.kind === "highlight") {
+    const row = document.createElement("div");
+    row.className = "field";
+    const caption = document.createElement("span");
+    caption.textContent = "Colour";
+    row.append(caption, swatches(mark.color, (color) => change({ color }), "Colour of this highlight"));
+    editor.append(row);
+  } else {
+    const select = document.createElement("select");
+    for (const category of CATEGORIES) select.append(new Option(category.label, category.id));
+    select.value = categoryOf(mark.category).id;
+    select.addEventListener("change", () => change({ category: select.value }));
+    const token = document.createElement("span");
+    token.className = "token";
+    token.textContent = placeholders(pages()).get(mark.id) ?? "";
+    token.title = "The placeholder pseudonymizing tools get for this text";
+    const label = field("Category", select);
+    label.append(token);
+    editor.append(label);
+  }
+  const input = document.createElement("input");
+  input.type = "text";
+  input.value = mark.text;
+  input.placeholder = "No text found: type it here";
+  input.addEventListener("change", () => change({ text: input.value.trim() }));
+  input.dataset.field = "text";
+  const comment = document.createElement("input");
+  comment.type = "text";
+  comment.value = mark.comment ?? "";
+  comment.placeholder = "Add a comment";
+  comment.addEventListener("change", () => change({ comment: comment.value.trim() }));
+  comment.dataset.field = "comment";
+  editor.append(field("Text under the mark", input), field("Comment", comment));
+  return editor;
 }
 
 function deleteMark(pageId, markId) {
@@ -1726,9 +1751,16 @@ function renderPickPanel() {
     : `${objects.length} objects on page ${indexOf(page.id) + 1}`;
   const editable = single?.type === "text";
   ui.pickTextRow.hidden = !editable;
-  const key = `${page.id}|${picked.ids.join(",")}|${editable ? (page.edits?.[single.id] ?? "") : ""}`;
+  const mark = single?.type === "mark" ? (page.marks ?? []).find((m) => `m:${m.id}` === single.id) : null;
+  if (mark) ui.pickWhat.textContent = `${mark.kind === "private" ? "Private mark" : "Highlight"} on page ${indexOf(page.id) + 1}`;
+  ui.pickMark.hidden = !mark;
+  // Fill the fields only when something else is selected or its values changed, not while typing.
+  const values = mark ? JSON.stringify(mark) + (placeholders(pages()).get(mark.id) ?? "") : editable ? (page.edits?.[single.id] ?? "") : "";
+  const key = `${page.id}|${picked.ids.join(",")}|${values}`;
   if (key === detail.pickKey) return;
   detail.pickKey = key;
+  ui.pickMark.replaceChildren(...(mark ? [markEditor(page, mark)] : []));
+  showPdfSource(page, single, mark, key);
   if (!editable) return;
   const changed = page.edits?.[single.id];
   ui.pickText.value = changed ?? "";
@@ -1742,6 +1774,28 @@ function renderPickPanel() {
       ui.pickText.dataset.original = text;
     });
   }
+}
+
+/** Developer options: how the selected object is written in the PDF. */
+function showPdfSource(page, single, mark, key) {
+  ui.pickSource.hidden = !(state.developer && single);
+  if (ui.pickSource.hidden) return;
+  ui.pickSourceText.textContent = "…";
+  const request = { sourceId: page.sourceId, index: page.index };
+  if (mark) Object.assign(request, { mark, placeholder: placeholders(pages()).get(mark.id) });
+  else request.id = single.id;
+  worker.call("inspect", request).then(
+    ({ source }) => {
+      if (detail.pickKey !== key) return;
+      const changed = !mark && page.edits?.[single.id] !== undefined;
+      ui.pickSourceText.textContent = changed
+        ? `% As in the uploaded file. Saving replaces it by: ${JSON.stringify(page.edits[single.id])}\n${source}`
+        : source;
+    },
+    (error) => {
+      if (detail.pickKey === key) ui.pickSourceText.textContent = `% Could not be read: ${error.message}`;
+    },
+  );
 }
 
 function applyPickedText() {
@@ -1786,10 +1840,10 @@ async function addMarkFromRect(pageId, rect) {
   if (kind === "private") mark.category = ui.category.value;
   else mark.color = state.highlightColor;
   state.detailId = page.id;
-  state.picked = null;
-  commit(addMark(pages(), page.id, mark), { animate: false });
+  // The new mark is selected, so its colour, text and comment can be set right away.
+  state.picked = { pageId: page.id, ids: [`m:${mark.id}`] };
   state.markId = mark.id;
-  renderDetails();
+  commit(addMark(pages(), page.id, mark), { animate: false });
   announce(kind === "private" ? `Marked ${text || "an area"} as private.` : `Highlighted ${text || "an area"}.`);
 }
 
@@ -1898,6 +1952,21 @@ ui.clearAll.addEventListener("click", async () => {
   worker.call("reset");
 });
 
+// Developer options, remembered between visits.
+const DEV_KEY = "pdf-studio:developer";
+try {
+  state.developer = localStorage.getItem(DEV_KEY) === "1";
+} catch {}
+ui.devOptions.checked = state.developer;
+ui.devOptions.addEventListener("change", () => {
+  state.developer = ui.devOptions.checked;
+  try {
+    localStorage.setItem(DEV_KEY, state.developer ? "1" : "0");
+  } catch {}
+  detail.pickKey = null; // fill the selection panel again
+  if (state.view === "details") renderDetails();
+});
+
 // Colour of the next highlight, remembered between visits.
 const COLOR_KEY = "pdf-studio:highlight-color";
 try {
@@ -1913,7 +1982,6 @@ function renderToolColors() {
           localStorage.setItem(COLOR_KEY, color);
         } catch {}
         renderToolColors();
-        if (state.tool !== "highlight") setTool("highlight");
       },
       "",
     ).children,
@@ -1985,45 +2053,26 @@ function announce(message) {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Offline: service worker
+// Offline, versions and updates (the service worker is registered in update.js)
 
-const install = setupInstall({ button: $("install"), dialog: $("install-dialog"), toast });
+let install = null;
 
-if ("serviceWorker" in navigator && location.protocol !== "file:") {
-  let reloading = false;
-  navigator.serviceWorker.addEventListener("controllerchange", () => {
-    if (reloading) location.reload();
-  });
-  const offerUpdate = (registration) => {
-    toast("A new version of PDF Studio is available.", {
-      duration: 30_000,
-      action: {
-        label: "Reload",
-        run: () => {
-          if (state.dirty && pages().length && !confirm("Reload now? Your changes have not been downloaded.")) return;
-          reloading = true;
-          state.dirty = false;
-          registration.waiting?.postMessage("skip-waiting");
-        },
-      },
-    });
-  };
-  navigator.serviceWorker
-    .register("./sw.js")
-    .then((registration) => {
-      if (registration.waiting && navigator.serviceWorker.controller) offerUpdate(registration);
-      registration.addEventListener("updatefound", () => {
-        const installing = registration.installing;
-        installing?.addEventListener("statechange", () => {
-          if (installing.state !== "installed") return;
-          if (navigator.serviceWorker.controller) offerUpdate(registration);
-          else
-            toast("PDF Studio now works offline.", install.canPrompt ? { action: { label: "Install", run: () => $("install").click() } } : {});
-        });
-      });
-    })
-    .catch(() => {});
-}
+const updates = setupUpdates({
+  isBusy: () => pages().length > 0,
+  confirmLoss: () => {
+    if (state.dirty && !confirm("Update and reload now? Your changes have not been downloaded and will be lost.")) return false;
+    state.dirty = false; // no second question from beforeunload
+    return true;
+  },
+  onChange: (status) => {
+    install?.refresh();
+    for (const element of document.querySelectorAll("[data-version]")) {
+      element.textContent = `Version ${describeVersion(status.current)}`;
+    }
+  },
+  toast,
+});
+install = setupInstall({ button: $("install"), dialog: $("install-dialog"), toast, updates });
 
 render({ animate: false });
 // For the browser test and debugging; not used by the app itself.
