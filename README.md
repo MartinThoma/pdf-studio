@@ -13,7 +13,7 @@ After the first visit it works offline, and it can be installed as an app.
 - **Rotate** left or right, **delete** pages; every page shows where it comes from.
 - **Details view**: one page large, with a strip of all pages to go through them (arrow keys,
   <kbd>D</kbd> / <kbd>G</kbd> switch between *Details* and *Arrange*).
-- **Highlight** text, and **mark private parts** (names, addresses, contact data, numbers) by
+- **Highlight** text in five colours, and **mark private parts** (names, addresses, contact data, numbers) by
   dragging over them. See [Privacy marks](#privacy-marks).
 - **Select objects** in the Details view and change or delete them: text, images, annotations
   the PDF came with, and your own marks. See [Changing and deleting objects](#changing-and-deleting-objects).

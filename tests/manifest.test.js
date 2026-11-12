@@ -33,3 +33,10 @@ test("index.html only references files that exist", () => {
   assert.ok(refs.length > 3);
   for (const ref of refs) assert.ok(existsSync(join(ROOT, ref)), `${ref} referenced but missing`);
 });
+
+test("the version shown in the app is the one in package.json", async () => {
+  const { VERSION } = await import("../src/version.js");
+  const { readFileSync } = await import("node:fs");
+  const packageJson = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
+  assert.equal(VERSION, packageJson.version);
+});

@@ -5,6 +5,7 @@
 //   kind      "highlight" | "private"
 //   category  for private marks: one of CATEGORIES
 //   text      the text under the mark (may be empty on scanned pages; the user can edit it)
+//   color     for highlights: one of HIGHLIGHT_COLORS (default: the first)
 //   comment   optional note by the user (why it is marked, what to do with it)
 //   rects     one or more [u0, v0, u1, v1] boxes, as fractions (0…1) of the page as it is drawn
 //             with its own /Rotate applied, origin top left. Fractions keep the marks valid at
@@ -22,6 +23,16 @@ export const CATEGORIES = [
 ];
 
 export const categoryOf = (id) => CATEGORIES.find((category) => category.id === id) ?? CATEGORIES[CATEGORIES.length - 1];
+
+export const HIGHLIGHT_COLORS = [
+  { id: "yellow", label: "Yellow", rgb: [1, 0.92, 0.25] },
+  { id: "green", label: "Green", rgb: [0.55, 0.9, 0.45] },
+  { id: "blue", label: "Blue", rgb: [0.5, 0.78, 1] },
+  { id: "purple", label: "Purple", rgb: [0.8, 0.66, 1] },
+  { id: "orange", label: "Orange", rgb: [1, 0.7, 0.3] },
+];
+
+export const colorOf = (id) => HIGHLIGHT_COLORS.find((color) => color.id === id) ?? HIGHLIGHT_COLORS[0];
 
 export const REPORT_FORMAT = "pdf-studio-privacy/1";
 

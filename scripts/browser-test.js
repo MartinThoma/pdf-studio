@@ -231,6 +231,11 @@ try {
   await drag([0.04, 0.05], [0.5, 0.12]); // the coloured band, no text
   await page.waitForSelector(".mark-row.is-current:not(.private)");
   assert.equal(await page.locator(".mark-row").count(), 2);
+  await page.locator('.mark-row:not(.private) .swatch[data-color="green"]').click();
+  assert.equal(await page.evaluate(() => window.pdfStudio.pages()[1].marks[1].color), "green");
+  await page.keyboard.press("Control+z");
+  assert.equal(await page.evaluate(() => window.pdfStudio.pages()[1].marks[1].color), "yellow");
+  assert.match(await page.locator("#shortcuts [data-version]").textContent(), /^Version \d+\.\d+\.\d+$/);
   await page.locator(".mark-row.private select").selectOption("address");
   assert.match(await page.locator(".mark-row .token").first().textContent(), /\[ADDRESS_1\]/);
   await page.locator(".mark-row.private select").selectOption("name");

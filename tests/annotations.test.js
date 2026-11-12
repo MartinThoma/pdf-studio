@@ -56,6 +56,7 @@ function markedPages() {
   };
   add(pages[0], "private", "Jane Doe");
   add(pages[0], "highlight", "important");
+  next = updateMark(next, pages[0].id, next[0].marks[1].id, { color: "green" });
   next = updateMark(next, pages[0].id, next[0].marks[0].id, { comment: "patient" });
   next = updateMark(next, pages[0].id, next[0].marks[1].id, { comment: "check this" });
   add(pages[1], "private", "jane  doe");
@@ -115,6 +116,7 @@ test("assemble writes marks as highlight annotations that tools can read", async
   assert.equal(annot.lookup(PDFName.of("QuadPoints")).size(), 8);
   assert.equal(annot.lookup(PDFName.of("PdfStudio")).get(PDFName.of("Comment")).decodeText(), "patient");
   assert.equal(first[1].get(PDFName.of("Subj")).decodeText(), "Highlight");
+  assert.deepEqual(first[1].lookup(PDFName.of("C")).asArray().map((n) => n.asNumber()), [0.55, 0.9, 0.45]);
   assert.equal(first[1].get(PDFName.of("Contents")).decodeText(), "check this");
   assert.equal(first[1].lookup(PDFName.of("PdfStudio")).get(PDFName.of("Comment")).decodeText(), "check this");
   assert.equal(second[0].lookup(PDFName.of("PdfStudio")).get(PDFName.of("Placeholder")).decodeText(), "[NAME_1]");

@@ -1,10 +1,11 @@
 // The editor: page grid, selection, drag and drop, keyboard, undo, upload and download.
 
-import { CATEGORIES, categoryOf, countPrivate, placeholders, privacyReport, textInRect } from "./annotations.js";
+import { CATEGORIES, HIGHLIGHT_COLORS, categoryOf, colorOf, countPrivate, placeholders, privacyReport, textInRect } from "./annotations.js";
 import {
   History, addMark, editText, erase, insert, move, newMarkId, normalizeRotation, pagesOf, remove, removeMark, rotate, updateMark,
 } from "./model.js";
 import { setupInstall } from "./install.js";
+import { VERSION } from "./version.js";
 import { PreviewRenderer, drawPage, openPreviewDocument, pageText } from "./thumbnails.js";
 import { PdfWorker } from "./worker-client.js";
 
@@ -69,6 +70,7 @@ const state = {
   view: "arrange", // "arrange" | "details"
   detailId: null, // the page shown in the details view
   tool: "select", // "select" | "highlight" | "private"
+  highlightColor: HIGHLIGHT_COLORS[0].id, // for the next highlight
   picked: null, // objects picked with the select tool: { pageId, ids }
   markId: null, // the mark picked in the details view
 };
@@ -309,6 +311,29 @@ async function loadPreview(card) {
 // ---------------------------------------------------------------------------------------------
 // Marks on thumbnails
 
+const cssColor = (id) => `rgb(${colorOf(id).rgb.map((n) => Math.round(n * 255)).join(" ")})`;
+
+/** A row of colour buttons; `current` is pressed, `choose(id)` is called on a click. */
+function swatches(current, choose, label) {
+  const group = document.createElement("div");
+  group.className = "swatches";
+  group.setAttribute("role", "group");
+  group.setAttribute("aria-label", label);
+  for (const color of HIGHLIGHT_COLORS) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "swatch";
+    button.title = color.label;
+    button.setAttribute("aria-label", color.label);
+    button.setAttribute("aria-pressed", String(color.id === colorOf(current).id));
+    button.dataset.color = color.id;
+    button.style.setProperty("--mark", cssColor(color.id));
+    button.addEventListener("click", () => choose(color.id));
+    group.append(button);
+  }
+  return group;
+}
+
 function renderMarks(container, marks = [], currentId = null, withDelete = false) {
   const current = withDelete ? marks.find((mark) => mark.id === currentId) : null;
   const extras = [];
@@ -330,6 +355,7 @@ function renderMarks(container, marks = [], currentId = null, withDelete = false
       mark.rects.map(([u0, v0, u1, v1]) => {
         const box = document.createElement("div");
         box.className = `mark ${mark.kind}${mark.id === currentId ? " is-current" : ""}`;
+        if (mark.kind === "highlight") box.style.setProperty("--mark", cssColor(mark.color));
         box.dataset.mark = mark.id;
         box.style.cssText = `left:${u0 * 100}%;top:${v0 * 100}%;width:${(u1 - u0) * 100}%;height:${(v1 - v0) * 100}%`;
         return box;
@@ -1223,6 +1249,12 @@ function renderMarkList(page) {
       const label = document.createElement("span");
       label.textContent = mark.kind === "private" ? "Private" : "Highlight";
       head.append(label);
+      if (mark.kind === "highlight") {
+        row.style.setProperty("--mark", cssColor(mark.color));
+        head.append(
+          swatches(mark.color, (color) => commit(updateMark(pages(), page.id, mark.id, { color }), { animate: false }), "Colour of this highlight"),
+        );
+      }
       if (mark.kind === "private") {
         const select = document.createElement("select");
         select.setAttribute("aria-label", "Category");
@@ -1750,7 +1782,9 @@ async function addMarkFromRect(pageId, rect) {
   if (!page || !kind) return;
   const { text, rects } = textInRect(await textOf(page), rect);
   if (indexOf(page.id) < 0) return; // deleted while the text was read
-  const mark = { id: newMarkId(), kind, category: kind === "private" ? ui.category.value : undefined, text, rects };
+  const mark = { id: newMarkId(), kind, text, rects };
+  if (kind === "private") mark.category = ui.category.value;
+  else mark.color = state.highlightColor;
   state.detailId = page.id;
   state.picked = null;
   commit(addMark(pages(), page.id, mark), { animate: false });
@@ -1863,6 +1897,31 @@ ui.clearAll.addEventListener("click", async () => {
   render({ animate: false });
   worker.call("reset");
 });
+
+// Colour of the next highlight, remembered between visits.
+const COLOR_KEY = "pdf-studio:highlight-color";
+try {
+  state.highlightColor = colorOf(localStorage.getItem(COLOR_KEY)).id;
+} catch {}
+function renderToolColors() {
+  $("highlight-colors").replaceChildren(
+    ...swatches(
+      state.highlightColor,
+      (color) => {
+        state.highlightColor = color;
+        try {
+          localStorage.setItem(COLOR_KEY, color);
+        } catch {}
+        renderToolColors();
+        if (state.tool !== "highlight") setTool("highlight");
+      },
+      "",
+    ).children,
+  );
+}
+renderToolColors();
+
+for (const element of document.querySelectorAll("[data-version]")) element.textContent = `Version ${VERSION}`;
 
 const SIZE_KEY = "pdf-studio:thumb-size";
 function applyThumbSize(value) {

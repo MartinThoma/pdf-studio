@@ -21,7 +21,7 @@ import {
   PDFStream,
   degrees,
 } from "../vendor/pdf-lib/pdf-lib.esm.min.js";
-import { categoryOf, placeholders, toPdfRect } from "./annotations.js";
+import { categoryOf, colorOf, placeholders, toPdfRect } from "./annotations.js";
 import { rewritePage } from "./content.js";
 
 export const PRODUCER = "PDF Studio (pdf-lib)";
@@ -109,7 +109,7 @@ export async function assemble(sources, pages) {
   return out.save();
 }
 
-const MARK_COLORS = { highlight: [1, 0.92, 0.25], private: [0.96, 0.3, 0.45] };
+const PRIVATE_COLOR = [0.96, 0.3, 0.45];
 
 /**
  * Writes marks as standard /Highlight annotations: any viewer shows them, and tools read the
@@ -140,7 +140,7 @@ function addMarks(out, page, marks, names, sourcePage) {
       Rect: union,
       // Top-left, top-right, bottom-left, bottom-right: the order viewers actually read.
       QuadPoints: rects.flatMap(([x0, y0, x1, y1]) => [x0, y1, x1, y1, x0, y0, x1, y0]),
-      C: MARK_COLORS[mark.kind] ?? MARK_COLORS.highlight,
+      C: mark.kind === "private" ? PRIVATE_COLOR : colorOf(mark.color).rgb,
       CA: isPrivate ? 0.55 : 0.5,
       F: 4,
     });
