@@ -2,6 +2,8 @@
 //
 //   add    { sourceId, bytes }   → { pages: [{ width, height, rotation }] }
 //   export { pages }             → { bytes }   (pages: [{ sourceId, index, rotation }])
+//   objects { sourceId, index }           → { objects }  (what can be deleted, see content.js)
+//   preview { sourceId, index, removed, edits } → { bytes }  (that page alone, objects deleted or changed)
 //   reset  {}                    → {}
 //
 // A failed call rejects with an Error that carries the worker's `code` ("encrypted", "invalid").

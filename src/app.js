@@ -1,8 +1,11 @@
 // The editor: page grid, selection, drag and drop, keyboard, undo, upload and download.
 
-import { History, insert, move, normalizeRotation, pagesOf, remove, rotate } from "./model.js";
+import { CATEGORIES, categoryOf, countPrivate, placeholders, privacyReport, textInRect } from "./annotations.js";
+import {
+  History, addMark, editText, erase, insert, move, newMarkId, normalizeRotation, pagesOf, remove, removeMark, rotate, updateMark,
+} from "./model.js";
 import { setupInstall } from "./install.js";
-import { PreviewRenderer, openPreviewDocument } from "./thumbnails.js";
+import { PreviewRenderer, drawPage, openPreviewDocument, pageText } from "./thumbnails.js";
 import { PdfWorker } from "./worker-client.js";
 
 const $ = (id) => document.getElementById(id);
@@ -24,6 +27,22 @@ const ui = {
   fileInput: $("file-input"),
   thumbSize: $("thumb-size"),
   clearAll: $("clear-all"),
+  privacyList: $("privacy-list"),
+  details: $("details"),
+  filmstrip: $("filmstrip"),
+  stage: $("stage"),
+  stageWrap: $("stage-wrap"),
+  pageInput: $("d-page"),
+  pageCount: $("d-count"),
+  pageMenu: $("page-menu"),
+  pickPanel: $("pick-panel"),
+  pickWhat: $("pick-what"),
+  pickTextRow: $("pick-text-row"),
+  pickText: $("pick-text"),
+  markItems: $("mark-items"),
+  markNone: $("mark-none"),
+  category: $("private-category"),
+  toolHint: $("tool-hint"),
   toasts: $("toasts"),
   announcer: $("announcer"),
 };
@@ -47,12 +66,55 @@ const state = {
   nextSource: 1,
   drag: null,
   press: null,
+  view: "arrange", // "arrange" | "details"
+  detailId: null, // the page shown in the details view
+  tool: "select", // "select" | "highlight" | "private"
+  picked: null, // objects picked with the select tool: { pageId, ids }
+  markId: null, // the mark picked in the details view
 };
 const cards = new Map(); // page id → <li>
 
 const pages = () => state.history.present;
 const indexOf = (id) => pages().findIndex((page) => page.id === id);
 const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
+
+// ---------------------------------------------------------------------------------------------
+// What to draw for a page: the uploaded file, or, once objects were deleted from the page, that
+// page written anew by the worker. So the editor shows what the download will contain.
+
+const edited = new Map(); // docKey → Promise<pdf.js document with that one page>
+const EDITED_KEPT = 16;
+
+const isEdited = (page) => Boolean(page.removed?.length || (page.edits && Object.keys(page.edits).length));
+const docKey = (page) =>
+  isEdited(page)
+    ? `${page.sourceId}:${page.index}:${[...(page.removed ?? [])].sort().join(",")}:${JSON.stringify(Object.entries(page.edits ?? {}).sort())}`
+    : `${page.sourceId}:${page.index}`;
+
+function docFor(page) {
+  const key = docKey(page);
+  if (!isEdited(page)) return { key, pdf: state.sources.get(page.sourceId).pdf, index: page.index };
+  let pdf = edited.get(key);
+  edited.delete(key);
+  if (!pdf) {
+    pdf = worker
+      .call("preview", { sourceId: page.sourceId, index: page.index, removed: page.removed, edits: page.edits })
+      .then(({ bytes }) => openPreviewDocument(bytes));
+    pdf.catch(() => {});
+  }
+  edited.set(key, pdf); // most recently used last
+  while (edited.size > EDITED_KEPT) {
+    const [oldKey, old] = edited.entries().next().value;
+    edited.delete(oldKey);
+    old.then((doc) => doc.destroy(), () => {});
+  }
+  return { key, pdf, index: 0 };
+}
+
+function previewOf(page) {
+  const { key, pdf, index } = docFor(page);
+  return isEdited(page) ? previews.get(key, index, pdf) : previews.get(page.sourceId, page.index, pdf);
+}
 
 // ---------------------------------------------------------------------------------------------
 // Rendering
@@ -75,6 +137,9 @@ function render({ animate = true, added = new Set() } = {}) {
   ui.empty.hidden = hasPages;
   ui.pages.hidden = !hasPages;
   ui.contextbar.hidden = !hasPages;
+  if (!hasPages) state.view = "arrange";
+  document.body.dataset.view = state.view;
+  ui.details.hidden = !(hasPages && state.view === "details");
 
   const ids = new Set(list.map((page) => page.id));
   for (const id of state.selection) if (!ids.has(id)) state.selection.delete(id);
@@ -121,6 +186,7 @@ function render({ animate = true, added = new Set() } = {}) {
     }
   }
   updateBars();
+  if (state.view === "details") renderDetails();
 }
 
 function createCard(page) {
@@ -132,10 +198,12 @@ function createCard(page) {
   card.setAttribute("role", "option");
   card.innerHTML = `
     <div class="thumb">
-      <div class="paper"><img alt="" draggable="false"></div>
+      <div class="paper"><img alt="" draggable="false"><div class="marks"></div></div>
+      <div class="page-flags" aria-hidden="true"></div>
       <span class="check" aria-hidden="true"><svg><use href="#i-check"/></svg></span>
       <span class="rotation-badge" aria-hidden="true" hidden></span>
       <div class="page-actions">
+        <button type="button" tabindex="-1" data-action="open" title="Open in Details view"><svg aria-hidden="true"><use href="#i-open"/></svg></button>
         <button type="button" tabindex="-1" data-action="rotate-left" title="Rotate left"><svg aria-hidden="true"><use href="#i-rotate-left"/></svg></button>
         <button type="button" tabindex="-1" data-action="rotate-right" title="Rotate right"><svg aria-hidden="true"><use href="#i-rotate-right"/></svg></button>
         <button type="button" tabindex="-1" data-action="delete" class="delete" title="Delete"><svg aria-hidden="true"><use href="#i-trash"/></svg></button>
@@ -165,6 +233,15 @@ function createCard(page) {
 function updateCard(card, page, number) {
   const source = state.sources.get(page.sourceId);
   card._page = page;
+  if (card._marks !== page.marks || card._removed !== page.removed || card._edits !== page.edits) {
+    card._marks = page.marks;
+    card._removed = page.removed;
+    card._edits = page.edits;
+    renderMarks(card.querySelector(".marks"), page.marks);
+    renderFlags(card.querySelector(".page-flags"), page.marks, (page.removed?.length ?? 0) + Object.keys(page.edits ?? {}).length);
+  }
+  // Objects were deleted or brought back: show the page as it is now.
+  if (card._previewKey !== undefined && card._previewKey !== docKey(page)) loadPreview(card);
   card.querySelector(".number").textContent = number;
   const badge = card.querySelector(".rotation-badge");
   badge.hidden = page.rotation === 0;
@@ -173,7 +250,7 @@ function updateCard(card, page, number) {
   card.tabIndex = page.id === state.focusId ? 0 : -1;
   card.setAttribute(
     "aria-label",
-    `Page ${number}: ${source.name}, page ${page.index + 1}${page.rotation ? `, rotated ${page.rotation}°` : ""}`,
+    `Page ${number}: ${source.name}, page ${page.index + 1}${page.rotation ? `, rotated ${page.rotation}°` : ""}${markSummary(page.marks)}`,
   );
   // Turn the shortest way, so 270° → 0° animates as a quarter turn and not three back.
   const current = normalizeRotation(card._angle);
@@ -208,13 +285,13 @@ async function loadPreview(card) {
   const page = card._page;
   const source = state.sources.get(page.sourceId);
   if (!source) return;
-  const url = await previews.get(page.sourceId, page.index, source.pdf);
-  if (!card.isConnected && !cards.has(page.id)) return;
+  const key = docKey(page);
+  card._previewKey = key;
+  const url = await previewOf(page);
+  if ((!card.isConnected && !cards.has(page.id)) || card._previewKey !== key) return;
   const paper = card.querySelector(".paper");
-  if (!url) {
-    paper.classList.add("failed");
-    return;
-  }
+  paper.classList.toggle("failed", !url);
+  if (!url) return;
   const img = paper.querySelector("img");
   img.addEventListener(
     "load",
@@ -229,6 +306,68 @@ async function loadPreview(card) {
   img.src = url;
 }
 
+// ---------------------------------------------------------------------------------------------
+// Marks on thumbnails
+
+function renderMarks(container, marks = [], currentId = null, withDelete = false) {
+  const current = withDelete ? marks.find((mark) => mark.id === currentId) : null;
+  const extras = [];
+  if (current) {
+    // A delete button at the top right corner of the picked mark.
+    const [, v0, u1] = current.rects[0];
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "mark-delete";
+    button.dataset.mark = current.id;
+    button.title = "Remove this mark (Del)";
+    button.setAttribute("aria-label", "Remove this mark");
+    button.innerHTML = '<svg aria-hidden="true"><use href="#i-close"/></svg>';
+    button.style.cssText = `left:${u1 * 100}%;top:${v0 * 100}%`;
+    extras.push(button);
+  }
+  container.replaceChildren(
+    ...marks.flatMap((mark) =>
+      mark.rects.map(([u0, v0, u1, v1]) => {
+        const box = document.createElement("div");
+        box.className = `mark ${mark.kind}${mark.id === currentId ? " is-current" : ""}`;
+        box.dataset.mark = mark.id;
+        box.style.cssText = `left:${u0 * 100}%;top:${v0 * 100}%;width:${(u1 - u0) * 100}%;height:${(v1 - v0) * 100}%`;
+        return box;
+      }),
+    ),
+    ...extras,
+  );
+}
+
+function countMarks(marks = []) {
+  const privateCount = marks.filter((mark) => mark.kind === "private").length;
+  return { privateCount, highlightCount: marks.length - privateCount };
+}
+
+function markSummary(marks) {
+  const { privateCount, highlightCount } = countMarks(marks);
+  const parts = [];
+  if (privateCount) parts.push(`${plural(privateCount, "private mark")}`);
+  if (highlightCount) parts.push(`${plural(highlightCount, "highlight")}`);
+  return parts.length ? `, ${parts.join(", ")}` : "";
+}
+
+function renderFlags(container, marks, changed = 0) {
+  const { privateCount, highlightCount } = countMarks(marks);
+  container.replaceChildren();
+  const add = (count, className, icon, label) => {
+    if (!count) return;
+    const flag = document.createElement("span");
+    flag.className = className;
+    flag.title = `${plural(count, label)}`;
+    flag.innerHTML = `<svg><use href="#${icon}"/></svg>${count}`;
+    container.append(flag);
+  };
+  add(highlightCount, "hl", "i-highlight", "highlight");
+  add(privateCount, "pv", "i-shield", "private mark");
+  add(changed, "rm", "i-select", "changed or deleted object");
+}
+
 function updateBars() {
   const list = pages();
   const usedSources = new Set(list.map((page) => page.sourceId));
@@ -236,13 +375,19 @@ function updateBars() {
   ui.redo.disabled = !state.history.canRedo;
   ui.download.disabled = list.length === 0;
   const selected = state.selection.size;
-  ui.selectionActions.hidden = selected === 0;
-  ui.summary.hidden = selected > 0;
+  const inGridView = state.view === "arrange";
+  ui.selectionActions.hidden = selected === 0 || !inGridView;
+  ui.summary.hidden = selected > 0 && inGridView;
+  const privateTotal = countPrivate(list);
+  ui.privacyList.hidden = privateTotal === 0;
+  $("view-arrange").setAttribute("aria-pressed", String(inGridView));
+  $("view-details").setAttribute("aria-pressed", String(!inGridView));
   ui.selectionCount.textContent = `${selected} selected`;
   ui.summary.innerHTML = "";
   const strong = document.createElement("strong");
   strong.textContent = plural(list.length, "page");
   ui.summary.append(strong, usedSources.size > 1 ? ` from ${usedSources.size} files` : "");
+  if (privateTotal) ui.summary.append(` · ${plural(privateTotal, "private mark")}`);
   document.title = list.length ? `${state.dirty ? "• " : ""}PDF Studio (${plural(list.length, "page")})` : "PDF Studio";
 }
 
@@ -440,6 +585,12 @@ ui.pages.addEventListener("click", (event) => {
   if (action === "rotate-left") rotatePages(ids, -90);
   if (action === "rotate-right") rotatePages(ids, 90);
   if (action === "delete") deletePages(ids);
+  if (action === "open") showDetails(id);
+});
+
+ui.pages.addEventListener("dblclick", (event) => {
+  const card = event.target.closest(".page");
+  if (card && !event.target.closest(".page-actions")) showDetails(card.dataset.id);
 });
 
 function startDrag(press, x, y) {
@@ -566,12 +717,30 @@ document.addEventListener("keydown", (event) => {
   }
   if (key === "Escape") {
     if (state.drag) finishDrag(false);
+    else if (state.view === "details" && !ui.pageMenu.hidden) closePageMenu();
+    else if (state.view === "details" && state.tool !== "select") setTool("select");
+    else if (state.view === "details" && state.picked) pick(null);
     else if (state.selection.size) setSelection([]);
     return;
   }
   if (inField || pages().length === 0) return;
   if (key === "?") {
     ui.shortcuts.showModal();
+    return;
+  }
+
+  if (!mod && !event.altKey && key.toLowerCase() === "d" && state.view === "arrange") {
+    event.preventDefault();
+    showDetails(state.focusId);
+    return;
+  }
+  if (!mod && !event.altKey && key.toLowerCase() === "g" && state.view === "details") {
+    event.preventDefault();
+    showArrange();
+    return;
+  }
+  if (state.view === "details") {
+    detailKey(event);
     return;
   }
 
@@ -735,7 +904,7 @@ async function download() {
   label.textContent = "Saving…";
   try {
     const { bytes } = await worker.call("export", {
-      pages: list.map(({ sourceId, index, rotation }) => ({ sourceId, index, rotation })),
+      pages: list.map(({ sourceId, index, rotation, marks, removed, edits }) => ({ sourceId, index, rotation, marks, removed, edits })),
     });
     const name = outputName(list);
     const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
@@ -773,6 +942,885 @@ function formatSize(bytes) {
 
 ui.download.addEventListener("click", download);
 
+ui.privacyList.addEventListener("click", () => {
+  const list = pages();
+  if (countPrivate(list) === 0) return;
+  const report = privacyReport(
+    list,
+    (page) => {
+      const info = state.sources.get(page.sourceId).pages[page.index];
+      return { box: info.box, rotation: info.rotation };
+    },
+    { document: outputName(list) },
+  );
+  const name = outputName(list).replace(/\.pdf$/i, "-privacy.json");
+  const url = URL.createObjectURL(new Blob([JSON.stringify(report, null, 2)], { type: "application/json" }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = name;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  toast(`Saved “${name}”. It contains the private texts in clear: keep it as safe as the PDF.`, { duration: 8000 });
+});
+
+
+// ---------------------------------------------------------------------------------------------
+// Details view: one page large, with highlight and privacy marks
+
+const detail = {
+  sheets: new Map(), // page id → .stage-item
+  sheetKey: "", // page ids that have a sheet
+  observer: null, // draws the sheets near the viewport, releases the far ones
+  scrollTo: null, // page to scroll to after the next render
+  frame: 0,
+  items: new Map(), // "sourceId:index" → Promise<text pieces>
+  filmKey: "", // page ids in the filmstrip
+  filmObserver: null,
+  objects: new Map(), // "sourceId:index" → objects found on that page
+  objectPromises: new Map(),
+  paint: 0,
+};
+
+for (const category of CATEGORIES) {
+  ui.category.append(new Option(category.label, category.id));
+}
+ui.category.value = "name";
+
+function showDetails(id = state.focusId) {
+  if (pages().length === 0) return;
+  state.view = "details";
+  state.detailId = pages().some((page) => page.id === id) ? id : pages()[0].id;
+  state.focusId = state.detailId;
+  state.markId = null;
+  detail.scrollTo = state.detailId;
+  render({ animate: false });
+  announce(`Details view, page ${indexOf(state.detailId) + 1} of ${pages().length}.`);
+}
+
+function showArrange() {
+  if (state.view === "arrange") return;
+  state.view = "arrange";
+  setTool(null);
+  state.focusId = state.detailId ?? state.focusId;
+  render({ animate: false });
+  focusCard(state.focusId);
+}
+
+/** Scrolls to a page of the details view. */
+function goDetail(to) {
+  const list = pages();
+  const next = Math.max(0, Math.min(list.length - 1, to));
+  const id = list[next].id;
+  state.detailId = id;
+  state.focusId = id;
+  state.markId = null;
+  detail.scrollTo = id;
+  renderDetails();
+}
+
+function setTool(tool) {
+  state.tool = !tool || state.tool === tool ? "select" : tool;
+  for (const name of ["select", "highlight", "private"]) {
+    $(`tool-${name}`).setAttribute("aria-pressed", String(state.tool === name));
+  }
+  ui.stage.classList.toggle("tooling", state.tool !== "select");
+  hideObjectHover();
+  if (state.tool === "select") for (const item of detail.sheets.values()) if (item._visible && item._page) objectsOf(item._page);
+  ui.toolHint.textContent =
+    state.tool === "highlight"
+      ? "Drag over text to highlight it."
+      : state.tool === "private"
+        ? "Drag over a name or other personal data to mark it as private."
+        : "Click a text, an image or a mark to select it, then change or delete it on the right.";
+}
+
+function renderDetails() {
+  const list = pages();
+  if (list.length === 0) return;
+  let index = indexOf(state.detailId);
+  if (index < 0) {
+    index = Math.min(list.length - 1, Math.max(0, detail.lastIndex ?? 0));
+    state.detailId = list[index].id;
+    state.focusId = state.detailId;
+  }
+  detail.lastIndex = index;
+  const page = list[index];
+  if (document.activeElement !== ui.pageInput) ui.pageInput.value = index + 1;
+  ui.pageInput.max = list.length;
+  ui.pageCount.textContent = list.length;
+  // Picked objects that are gone (deleted, undone) are no longer picked.
+  if (state.picked) {
+    const pickedPage = list.find((p) => p.id === state.picked.pageId);
+    const there = new Set(pickedPage ? deletable(pickedPage).map((object) => object.id) : []);
+    const ids = state.picked.ids.filter((id) => there.has(id));
+    state.picked = ids.length ? { pageId: state.picked.pageId, ids } : null;
+  }
+  renderSheets(list);
+  renderPickPanel();
+  renderMarkList(page);
+  renderFilmstrip(list);
+  if (detail.scrollTo) {
+    const target = detail.sheets.get(detail.scrollTo);
+    detail.scrollTo = null;
+    target?.scrollIntoView({ block: "start", behavior: "instant" });
+  }
+}
+
+/** One sheet per page, in a column; the page being read is the one in the middle of the screen. */
+function renderSheets(list) {
+  const key = list.map((page) => page.id).join(",");
+  if (key !== detail.sheetKey) {
+    detail.sheetKey = key;
+    detail.observer?.disconnect();
+    detail.observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          const item = entry.target;
+          item._visible = entry.isIntersecting;
+          if (entry.isIntersecting) drawSheet(item);
+          else releaseSheet(item);
+        }
+      },
+      { rootMargin: "1200px 0px" },
+    );
+    const old = detail.sheets;
+    detail.sheets = new Map();
+    for (const item of old.values()) if (!list.some((page) => page.id === item.dataset.id)) releaseSheet(item);
+    ui.stage.replaceChildren(
+      ...list.map((page) => {
+        const item = old.get(page.id) ?? createSheet(page);
+        detail.sheets.set(page.id, item);
+        item._visible = false;
+        detail.observer.observe(item);
+        return item;
+      }),
+    );
+  }
+  for (const page of list) {
+    const item = detail.sheets.get(page.id);
+    item._page = page;
+    layoutSheet(item, page);
+    if (item._marks !== page.marks || item._current !== state.markId) {
+      item._marks = page.marks;
+      item._current = state.markId;
+      renderMarks(item.querySelector(".marks"), page.marks, state.markId, true);
+    }
+    item.classList.toggle("is-current", page.id === state.detailId);
+    const picks = state.picked?.pageId === page.id ? new Set(state.picked.ids) : null;
+    item.querySelector(".picks").replaceChildren(
+      ...(picks ? deletable(page).filter((object) => picks.has(object.id)) : []).map((object) => {
+        const box = document.createElement("div");
+        box.className = "pick";
+        box.style.cssText = boxStyle(object.box);
+        return box;
+      }),
+    );
+  }
+}
+
+const boxStyle = ([u0, v0, u1, v1]) =>
+  `left:${u0 * 100}%;top:${v0 * 100}%;width:${(u1 - u0) * 100}%;height:${(v1 - v0) * 100}%`;
+
+function createSheet(page) {
+  const item = document.createElement("div");
+  item.className = "stage-item";
+  item.dataset.id = page.id;
+  item.innerHTML = '<div class="sheet"><canvas></canvas><div class="marks"></div><div class="picks"></div><div class="draft" hidden></div><div class="object-hover" hidden></div></div>';
+  return item;
+}
+
+/** Sizes the page to the available width; the user's rotation is a CSS turn of the sheet. */
+function layoutSheet(item, page) {
+  const info = state.sources.get(page.sourceId).pages[page.index];
+  const [w, h] = info.rotation % 180 ? [info.height, info.width] : [info.width, info.height];
+  const turned = page.rotation % 180 !== 0;
+  const [rw] = turned ? [h, w] : [w, h];
+  const available = Math.max(200, ui.stageWrap.clientWidth - 32);
+  const scale = Math.min(available / rw, 900 / rw, 2.4); // up to 2.4 × the page's size in points
+  const baseW = w * scale;
+  const baseH = h * scale;
+  const [stageW, stageH] = turned ? [baseH, baseW] : [baseW, baseH];
+  const sheet = item.querySelector(".sheet");
+  item.style.width = `${stageW}px`;
+  item.style.height = `${stageH}px`;
+  sheet.style.width = `${baseW}px`;
+  sheet.style.height = `${baseH}px`;
+  sheet.style.left = `${(stageW - baseW) / 2}px`;
+  sheet.style.top = `${(stageH - baseH) / 2}px`;
+  sheet.style.transform = `rotate(${page.rotation}deg)`;
+  sheet.dataset.angle = page.rotation;
+  item._baseW = baseW;
+  if (item._visible) drawSheet(item);
+}
+
+function drawSheet(item) {
+  const page = item._page;
+  const width = Math.round(item._baseW / 40);
+  if (!page || (item._drawnKey === docKey(page) && item._drawnWidth === width)) return;
+  item._drawing?.cancel();
+  const { key, pdf, index } = docFor(page);
+  item._drawnKey = key;
+  item._drawnWidth = width;
+  const drawing = drawPage(pdf, index, item.querySelector("canvas"), item._baseW);
+  item._drawing = drawing;
+  drawing.done.catch(() => {
+    if (item._drawing === drawing) item._drawnKey = null;
+  });
+}
+
+/** Frees the pixels of a sheet that is far from the screen. */
+function releaseSheet(item) {
+  item._drawing?.cancel();
+  item._drawing = null;
+  item._drawnKey = null;
+  item._drawnWidth = null;
+  const canvas = item.querySelector("canvas");
+  canvas.width = canvas.height = 0;
+}
+
+/** The page in the reading zone (a bit below the sticky bars) becomes the current page. */
+function updateCurrentFromScroll() {
+  detail.frame = 0;
+  if (state.view !== "details" || marking) return;
+  const bars = ui.stageWrap.getBoundingClientRect().top;
+  const line = Math.max(bars, 120) + (innerHeight - Math.max(bars, 120)) * 0.3;
+  let best = null;
+  for (const item of detail.sheets.values()) {
+    const rect = item.getBoundingClientRect();
+    const distance = line < rect.top ? rect.top - line : line > rect.bottom ? line - rect.bottom : 0;
+    if (!best || distance < best.distance) best = { item, distance };
+    if (distance === 0) break;
+  }
+  const id = best?.item.dataset.id;
+  if (!id || id === state.detailId) return;
+  state.detailId = id;
+  state.focusId = id;
+  state.markId = null;
+  renderDetails();
+}
+
+addEventListener(
+  "scroll",
+  () => {
+    if (state.view === "details" && !detail.frame) detail.frame = requestAnimationFrame(updateCurrentFromScroll);
+  },
+  { passive: true },
+);
+
+function renderMarkList(page) {
+  const marks = page.marks ?? [];
+  ui.markNone.hidden = marks.length > 0;
+  const names = placeholders(pages());
+  ui.markItems.replaceChildren(
+    ...marks.map((mark) => {
+      const row = document.createElement("li");
+      row.className = `mark-row ${mark.kind}${mark.id === state.markId ? " is-current" : ""}`;
+      row.dataset.mark = mark.id;
+      const head = document.createElement("div");
+      head.className = "head";
+      const label = document.createElement("span");
+      label.textContent = mark.kind === "private" ? "Private" : "Highlight";
+      head.append(label);
+      if (mark.kind === "private") {
+        const select = document.createElement("select");
+        select.setAttribute("aria-label", "Category");
+        for (const category of CATEGORIES) select.append(new Option(category.label, category.id));
+        select.value = categoryOf(mark.category).id;
+        select.addEventListener("change", () => commit(updateMark(pages(), page.id, mark.id, { category: select.value }), { animate: false }));
+        const token = document.createElement("span");
+        token.className = "token";
+        token.textContent = names.get(mark.id) ?? "";
+        head.append(select, token);
+      }
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "button small ghost icon-only danger";
+      remove.title = "Remove this mark";
+      remove.innerHTML = '<svg aria-hidden="true"><use href="#i-trash"/></svg>';
+      remove.addEventListener("click", () => deleteMark(page.id, mark.id));
+      head.append(remove);
+      const input = document.createElement("input");
+      input.type = "text";
+      input.value = mark.text;
+      input.placeholder = "No text found: type it here";
+      input.setAttribute("aria-label", "Text under the mark");
+      input.title = "Text under the mark";
+      input.addEventListener("change", () => {
+        commit(updateMark(pages(), page.id, mark.id, { text: input.value.trim() }), { animate: false });
+      });
+      const comment = document.createElement("input");
+      comment.type = "text";
+      comment.value = mark.comment ?? "";
+      comment.placeholder = "Add a comment";
+      comment.setAttribute("aria-label", "Comment");
+      comment.addEventListener("change", () => {
+        commit(updateMark(pages(), page.id, mark.id, { comment: comment.value.trim() }), { animate: false });
+      });
+      row.append(head, input, comment);
+      row.addEventListener("click", (event) => {
+        if (event.target.closest("button, input, select")) return;
+        pick({ pageId: page.id, ids: [`m:${mark.id}`] });
+      });
+      return row;
+    }),
+  );
+}
+
+function deleteMark(pageId, markId) {
+  commit(removeMark(pages(), pageId, markId), { animate: false });
+  if (state.markId === markId) state.markId = null;
+  renderDetails();
+  toast("Removed the mark.", { action: { label: "Undo", run: undo } });
+}
+
+function loadFilm(item, page) {
+  const key = docKey(page);
+  item._previewKey = key;
+  previewOf(page).then((url) => {
+    if (url && item._previewKey === key) item.querySelector("img").src = url;
+  });
+}
+
+function renderFilmstrip(list) {
+  const key = list.map((page) => page.id).join(",");
+  if (key !== detail.filmKey) {
+    detail.filmKey = key;
+    detail.filmObserver?.disconnect();
+    detail.filmObserver = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (!entry.isIntersecting) continue;
+          detail.filmObserver.unobserve(entry.target);
+          const item = entry.target;
+          const page = pages().find((p) => p.id === item.dataset.id);
+          const source = page && state.sources.get(page.sourceId);
+          if (!source) continue;
+          loadFilm(item, page);
+        }
+      },
+      { root: ui.filmstrip, rootMargin: "300px 0px" },
+    );
+    ui.filmstrip.replaceChildren(
+      ...list.map((page, i) => {
+        const item = document.createElement("div");
+        item.className = "film-item";
+        item.dataset.id = page.id;
+        item.tabIndex = 0;
+        item.setAttribute("role", "button");
+        item.innerHTML =
+          '<span class="film-thumb"><span class="film-paper"><img alt="" draggable="false"></span></span><span class="n"></span>' +
+          '<button type="button" class="film-delete" tabindex="-1" title="Delete this page"><svg aria-hidden="true"><use href="#i-trash"/></svg></button>';
+        item.querySelector(".n").textContent = i + 1;
+        item.setAttribute("aria-label", `Page ${i + 1}. Drag to move it, right-click for more.`);
+        item.querySelector(".film-delete").setAttribute("aria-label", `Delete page ${i + 1}`);
+        detail.filmObserver.observe(item);
+        return item;
+      }),
+    );
+  }
+  const items = ui.filmstrip.querySelectorAll(".film-item");
+  list.forEach((page, i) => {
+    const item = items[i];
+    if (!item) return;
+    const info = state.sources.get(page.sourceId).pages[page.index];
+    const [w, h] = info.rotation % 180 ? [info.height, info.width] : [info.width, info.height];
+    const longest = Math.max(w, h);
+    const paper = item.querySelector(".film-paper");
+    paper.style.width = `${(w / longest) * 72}px`;
+    paper.style.height = `${(h / longest) * 72}px`;
+    paper.style.transform = `rotate(${page.rotation}deg)`;
+    if (item._previewKey !== undefined && item._previewKey !== docKey(page)) loadFilm(item, page);
+    const { privateCount, highlightCount } = countMarks(page.marks);
+    item.querySelectorAll(".dotmark").forEach((dot) => dot.remove());
+    const thumb = item.querySelector(".film-thumb");
+    if (privateCount) thumb.insertAdjacentHTML("beforeend", '<i class="dotmark"></i>');
+    if (highlightCount) thumb.insertAdjacentHTML("beforeend", '<i class="dotmark hl"></i>');
+    const current = page.id === state.detailId;
+    if (current) {
+      item.setAttribute("aria-current", "page");
+      if (detail.scrolledTo !== page.id) item.scrollIntoView({ block: "nearest" });
+    } else item.removeAttribute("aria-current");
+  });
+  detail.scrolledTo = state.detailId;
+}
+
+// Page operations live in the strip: click to go there, drag to move the page, the bin or a
+// right-click to delete, right-click to rotate.
+
+/** Rotating changes the height of a page, so keep the page being read in view. */
+function rotateInDetails(id, degrees) {
+  detail.scrollTo = state.detailId;
+  rotatePages([id], degrees);
+}
+
+function deleteInDetails(id) {
+  const index = indexOf(id);
+  if (index < 0) return;
+  const wasCurrent = id === state.detailId;
+  const current = state.detailId;
+  deletePages([id]);
+  const list = pages();
+  if (list.length === 0) return;
+  state.detailId = wasCurrent ? list[Math.min(index, list.length - 1)].id : current;
+  state.focusId = state.detailId;
+  detail.scrollTo = state.detailId;
+  renderDetails();
+}
+
+let filmDrag = null; // { id, y, active, marker, target }
+
+ui.filmstrip.addEventListener("pointerdown", (event) => {
+  const item = event.target.closest(".film-item");
+  if (!item || event.button !== 0 || event.pointerType !== "mouse" || event.target.closest(".film-delete")) return;
+  filmDrag = { id: item.dataset.id, y: event.clientY, active: false, marker: null, target: null };
+});
+
+document.addEventListener("pointermove", (event) => {
+  if (!filmDrag) return;
+  if (!filmDrag.active) {
+    if (Math.abs(event.clientY - filmDrag.y) < DRAG_THRESHOLD) return;
+    filmDrag.active = true;
+    filmDrag.marker = document.createElement("div");
+    filmDrag.marker.className = "film-marker";
+    ui.filmstrip.append(filmDrag.marker);
+    ui.filmstrip.querySelector(`.film-item[data-id="${filmDrag.id}"]`)?.classList.add("is-dragging");
+    document.body.classList.add("dragging");
+  }
+  const strip = ui.filmstrip.getBoundingClientRect();
+  if (event.clientY < strip.top + 36) ui.filmstrip.scrollTop -= 14;
+  if (event.clientY > strip.bottom - 36) ui.filmstrip.scrollTop += 14;
+  const items = [...ui.filmstrip.querySelectorAll(".film-item")];
+  let target = items.length;
+  for (let i = 0; i < items.length; i++) {
+    const rect = items[i].getBoundingClientRect();
+    if (event.clientY < rect.top + rect.height / 2) {
+      target = i;
+      break;
+    }
+  }
+  filmDrag.target = target;
+  const before = items[target];
+  const last = items[items.length - 1];
+  filmDrag.marker.style.top = `${(before ? before.offsetTop : last.offsetTop + last.offsetHeight) - 6}px`;
+});
+
+function endFilmDrag(apply) {
+  const drag = filmDrag;
+  filmDrag = null;
+  if (!drag?.active) return;
+  drag.marker.remove();
+  document.body.classList.remove("dragging");
+  ui.filmstrip.querySelector(".is-dragging")?.classList.remove("is-dragging");
+  detail.filmDragged = true; // the click that follows is not a click on the page
+  setTimeout(() => (detail.filmDragged = false), 0);
+  if (apply && drag.target !== null) {
+    detail.scrollTo = state.detailId;
+    movePages([drag.id], drag.target);
+  }
+}
+document.addEventListener("pointerup", () => endFilmDrag(true));
+document.addEventListener("pointercancel", () => endFilmDrag(false));
+
+ui.filmstrip.addEventListener("click", (event) => {
+  const item = event.target.closest(".film-item");
+  if (!item || detail.filmDragged) return;
+  if (event.target.closest(".film-delete")) deleteInDetails(item.dataset.id);
+  else goDetail(indexOf(item.dataset.id));
+});
+
+ui.filmstrip.addEventListener("keydown", (event) => {
+  const item = event.target.closest(".film-item");
+  if (!item || event.target !== item) return;
+  if (event.key === "Enter" || event.key === " ") {
+    event.preventDefault();
+    goDetail(indexOf(item.dataset.id));
+  } else if (event.key === "ContextMenu" || (event.key === "F10" && event.shiftKey)) {
+    event.preventDefault();
+    const rect = item.getBoundingClientRect();
+    openPageMenu(item.dataset.id, rect.right - 8, rect.top + 20);
+  }
+});
+
+ui.filmstrip.addEventListener("contextmenu", (event) => {
+  const item = event.target.closest(".film-item");
+  if (!item) return;
+  event.preventDefault();
+  openPageMenu(item.dataset.id, event.clientX, event.clientY);
+});
+
+function openPageMenu(id, x, y) {
+  ui.pageMenu.dataset.id = id;
+  ui.pageMenu.hidden = false;
+  const { width, height } = ui.pageMenu.getBoundingClientRect();
+  ui.pageMenu.style.left = `${Math.max(8, Math.min(x, innerWidth - width - 8))}px`;
+  ui.pageMenu.style.top = `${Math.max(8, Math.min(y, innerHeight - height - 8))}px`;
+  ui.pageMenu.querySelector("button").focus();
+}
+
+function closePageMenu() {
+  ui.pageMenu.hidden = true;
+}
+
+ui.pageMenu.addEventListener("click", (event) => {
+  const action = event.target.closest("button")?.dataset.action;
+  const id = ui.pageMenu.dataset.id;
+  closePageMenu();
+  if (action === "rotate-left") rotateInDetails(id, -90);
+  if (action === "rotate-right") rotateInDetails(id, 90);
+  if (action === "delete") deleteInDetails(id);
+});
+ui.pageMenu.addEventListener("keydown", (event) => {
+  const buttons = [...ui.pageMenu.querySelectorAll("button")];
+  const at = buttons.indexOf(document.activeElement);
+  if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+    event.preventDefault();
+    event.stopPropagation();
+    buttons[(at + (event.key === "ArrowDown" ? 1 : buttons.length - 1)) % buttons.length].focus();
+  }
+});
+document.addEventListener("pointerdown", (event) => {
+  if (!ui.pageMenu.hidden && !ui.pageMenu.contains(event.target)) closePageMenu();
+});
+addEventListener("scroll", () => !ui.pageMenu.hidden && closePageMenu(), { passive: true, capture: true });
+addEventListener("blur", closePageMenu);
+
+// Text of the pages, read once per page (scanned pages have none).
+function textOf(page) {
+  const { key, pdf, index } = docFor(page);
+  if (!detail.items.has(key)) detail.items.set(key, pageText(pdf, index).catch(() => []));
+  return detail.items.get(key);
+}
+
+/** Pointer position on a sheet as fractions, undoing the sheet's CSS rotation. */
+function sheetPoint(event, sheet) {
+  const box = sheet.getBoundingClientRect();
+  const angle = (-Number(sheet.dataset.angle || 0) * Math.PI) / 180;
+  const dx = event.clientX - (box.left + box.width / 2);
+  const dy = event.clientY - (box.top + box.height / 2);
+  const x = dx * Math.cos(angle) - dy * Math.sin(angle);
+  const y = dx * Math.sin(angle) + dy * Math.cos(angle);
+  const clamp = (n) => Math.max(0, Math.min(1, n));
+  return [clamp(x / sheet.offsetWidth + 0.5), clamp(y / sheet.offsetHeight + 0.5)];
+}
+
+let marking = null;
+
+ui.stage.addEventListener("pointerdown", (event) => {
+  const sheet = event.target.closest(".sheet");
+  if (!sheet || event.target.closest(".mark-delete") || event.button !== 0) return;
+  const pageId = sheet.parentElement.dataset.id;
+  // With the select tool a finger still scrolls the page; only the mouse drags a rectangle.
+  const touch = state.tool === "select" && event.pointerType !== "mouse";
+  if (!touch) {
+    event.preventDefault();
+    sheet.setPointerCapture(event.pointerId);
+  }
+  marking = {
+    sheet,
+    pageId,
+    touch,
+    start: sheetPoint(event, sheet),
+    end: sheetPoint(event, sheet),
+    pointerId: event.pointerId,
+  };
+  if (!touch) drawDraft();
+});
+
+ui.stage.addEventListener("click", (event) => {
+  const button = event.target.closest(".mark-delete");
+  if (button) deleteMark(button.closest(".stage-item").dataset.id, button.dataset.mark);
+});
+
+ui.stage.addEventListener("pointermove", (event) => {
+  if (!marking && state.tool === "select" && event.pointerType === "mouse") showObjectHover(event);
+  if (!marking || event.pointerId !== marking.pointerId) return;
+  marking.end = sheetPoint(event, marking.sheet);
+  if (!marking.touch) drawDraft();
+});
+
+ui.stage.addEventListener("pointerup", (event) => {
+  if (!marking || event.pointerId !== marking.pointerId) return;
+  const { start, sheet, pageId, touch } = marking;
+  marking.end = sheetPoint(event, sheet);
+  const rect = [start[0], start[1], marking.end[0], marking.end[1]];
+  stopMarking();
+  const widthPx = Math.abs(rect[2] - rect[0]) * sheet.offsetWidth;
+  const heightPx = Math.abs(rect[3] - rect[1]) * sheet.offsetHeight;
+  const dragged = widthPx >= 6 && heightPx >= 4;
+  if (state.tool === "select") {
+    if (!(touch && dragged)) pickAt(pageId, rect, dragged, event.shiftKey || event.ctrlKey || event.metaKey);
+  } else if (dragged) addMarkFromRect(pageId, rect);
+});
+
+ui.stage.addEventListener("pointerleave", hideObjectHover);
+ui.stage.addEventListener("pointercancel", stopMarking);
+
+function stopMarking() {
+  if (marking) marking.sheet.querySelector(".draft").hidden = true;
+  marking = null;
+}
+
+function drawDraft() {
+  const [x0, y0, x1, y1] = [marking.start[0], marking.start[1], marking.end[0], marking.end[1]];
+  const draft = marking.sheet.querySelector(".draft");
+  draft.hidden = false;
+  draft.className = `draft ${state.tool}`;
+  draft.style.cssText = boxStyle([Math.min(x0, x1), Math.min(y0, y1), Math.max(x0, x1), Math.max(y0, y1)]);
+}
+
+// Objects: texts, images and annotations of the PDF, and marks made here. The select tool picks
+// them; picked objects are changed or deleted in the panel on the right.
+
+/** What the worker found on the page (see content.js), read once per page of an upload. */
+function objectsOf(page) {
+  const key = `${page.sourceId}:${page.index}`;
+  if (!detail.objectPromises.has(key)) {
+    const promise = worker
+      .call("objects", { sourceId: page.sourceId, index: page.index })
+      .then(({ objects }) => objects, () => []);
+    promise.then((objects) => detail.objects.set(key, objects));
+    detail.objectPromises.set(key, promise);
+  }
+  return detail.objectPromises.get(key);
+}
+
+/** What can be picked on the page right now: objects still there, and marks. */
+function deletable(page) {
+  const gone = new Set(page.removed ?? []);
+  const objects = (detail.objects.get(`${page.sourceId}:${page.index}`) ?? []).filter((object) => !gone.has(object.id));
+  const marks = (page.marks ?? []).flatMap((mark) => mark.rects.map((box) => ({ id: `m:${mark.id}`, type: "mark", box })));
+  return [...marks, ...objects];
+}
+
+/**
+ * The object a click at this point picks: marks first (they lie on top), then the smallest
+ * object, so text on top of a background picture wins. If what is picked already is under the
+ * point, the next one below it: clicking again reaches the text under a mark.
+ */
+function objectAt(page, [u, v]) {
+  const slack = 0.004;
+  const under = deletable(page)
+    .filter(({ box: [u0, v0, u1, v1] }) => u >= u0 - slack && u <= u1 + slack && v >= v0 - slack && v <= v1 + slack)
+    .map((object) => ({ object, area: (object.box[2] - object.box[0]) * (object.box[3] - object.box[1]) }))
+    .sort((a, b) => (b.object.type === "mark") - (a.object.type === "mark") || a.area - b.area)
+    .map(({ object }) => object);
+  const ids = [...new Set(under.map((object) => object.id))];
+  const picked = state.picked?.pageId === page.id && state.picked.ids.length === 1 ? state.picked.ids[0] : null;
+  const at = ids.indexOf(picked);
+  const id = at >= 0 && ids.length > 1 ? ids[(at + 1) % ids.length] : ids[0];
+  return under.find((object) => object.id === id) ?? null;
+}
+
+function showObjectHover(event) {
+  const sheet = event.target.closest?.(".sheet");
+  const page = sheet && pages().find((p) => p.id === sheet.parentElement.dataset.id);
+  if (!page) return hideObjectHover();
+  objectsOf(page);
+  const object = objectAt(page, sheetPoint(event, sheet));
+  for (const box of ui.stage.querySelectorAll(".object-hover")) {
+    const here = object && box.parentElement === sheet;
+    box.hidden = !here;
+    if (here) box.style.cssText = boxStyle(object.box);
+  }
+}
+
+function hideObjectHover() {
+  for (const box of ui.stage.querySelectorAll(".object-hover")) box.hidden = true;
+}
+
+/** Picks the object under a click, or everything whose middle is inside a dragged rectangle. */
+async function pickAt(pageId, rect, dragged, add) {
+  let page = pages().find((p) => p.id === pageId);
+  if (!page) return;
+  await objectsOf(page);
+  page = pages().find((p) => p.id === pageId);
+  if (!page) return;
+  let ids;
+  if (dragged) {
+    const [u0, v0, u1, v1] = [Math.min(rect[0], rect[2]), Math.min(rect[1], rect[3]), Math.max(rect[0], rect[2]), Math.max(rect[1], rect[3])];
+    ids = deletable(page)
+      .filter(({ box }) => {
+        const cu = (box[0] + box[2]) / 2;
+        const cv = (box[1] + box[3]) / 2;
+        return cu >= u0 && cu <= u1 && cv >= v0 && cv <= v1;
+      })
+      .map((object) => object.id);
+  } else {
+    const hit = objectAt(page, [rect[0], rect[1]]);
+    ids = hit ? [hit.id] : [];
+  }
+  // Shift or Ctrl adds to (or takes from) what is picked on the same page.
+  if (add && state.picked?.pageId === pageId) {
+    const now = new Set(state.picked.ids);
+    for (const id of ids) {
+      if (now.has(id) && !dragged) now.delete(id);
+      else now.add(id);
+    }
+    ids = [...now];
+  }
+  pick(ids.length ? { pageId, ids: [...new Set(ids)] } : null, pageId);
+}
+
+function pick(picked, pageId = picked?.pageId) {
+  state.picked = picked;
+  if (pageId) {
+    state.detailId = pageId;
+    state.focusId = pageId;
+  }
+  // A single picked mark is also the current mark of the list on the right.
+  state.markId = picked?.ids.length === 1 && picked.ids[0].startsWith("m:") ? picked.ids[0].slice(2) : null;
+  hideObjectHover();
+  renderDetails();
+  if (picked) announce(picked.ids.length === 1 ? "1 object selected." : `${picked.ids.length} objects selected.`);
+}
+
+const TYPE_NAMES = { text: "Text", image: "Image", group: "Group of objects", annotation: "Annotation", mark: "Mark" };
+
+function renderPickPanel() {
+  const picked = state.picked;
+  const page = picked && pages().find((p) => p.id === picked.pageId);
+  ui.pickPanel.hidden = !page;
+  if (!page) {
+    detail.pickKey = null;
+    return;
+  }
+  const all = deletable(page);
+  const objects = [...new Set(picked.ids)].map((id) => all.find((object) => object.id === id)).filter(Boolean);
+  const single = objects.length === 1 ? objects[0] : null;
+  ui.pickWhat.textContent = single
+    ? `${TYPE_NAMES[single.type]} on page ${indexOf(page.id) + 1}`
+    : `${objects.length} objects on page ${indexOf(page.id) + 1}`;
+  const editable = single?.type === "text";
+  ui.pickTextRow.hidden = !editable;
+  const key = `${page.id}|${picked.ids.join(",")}|${editable ? (page.edits?.[single.id] ?? "") : ""}`;
+  if (key === detail.pickKey) return;
+  detail.pickKey = key;
+  if (!editable) return;
+  const changed = page.edits?.[single.id];
+  ui.pickText.value = changed ?? "";
+  ui.pickText.dataset.original = changed ?? "";
+  if (changed === undefined) {
+    // What the run says now, read from the page.
+    textOf(page).then((items) => {
+      if (detail.pickKey !== key || ui.pickText.value !== "") return;
+      const { text } = textInRect(items, single.box);
+      ui.pickText.value = text;
+      ui.pickText.dataset.original = text;
+    });
+  }
+}
+
+function applyPickedText() {
+  const picked = state.picked;
+  const page = picked && pages().find((p) => p.id === picked.pageId);
+  if (!page || picked.ids.length !== 1) return;
+  const text = ui.pickText.value;
+  if (text.trim() === "") return deletePicked();
+  if (text === ui.pickText.dataset.original) return;
+  commit(editText(pages(), page.id, picked.ids[0], text), { animate: false });
+  announce("Text changed.");
+}
+
+function deletePicked() {
+  const picked = state.picked;
+  const page = picked && pages().find((p) => p.id === picked.pageId);
+  if (!page) return;
+  const marks = picked.ids.filter((id) => id.startsWith("m:")).map((id) => id.slice(2));
+  const objects = picked.ids.filter((id) => !id.startsWith("m:"));
+  state.picked = null;
+  state.markId = null;
+  commit(erase(pages(), page.id, { objects, marks }), { animate: false });
+  toast(`Deleted ${plural(marks.length + objects.length, "object")}.`, { action: { label: "Undo", run: undo } });
+}
+
+$("pick-apply").addEventListener("click", applyPickedText);
+$("pick-delete").addEventListener("click", deletePicked);
+ui.pickText.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    applyPickedText();
+  }
+});
+
+async function addMarkFromRect(pageId, rect) {
+  const page = pages().find((p) => p.id === pageId);
+  const kind = state.tool;
+  if (!page || !kind) return;
+  const { text, rects } = textInRect(await textOf(page), rect);
+  if (indexOf(page.id) < 0) return; // deleted while the text was read
+  const mark = { id: newMarkId(), kind, category: kind === "private" ? ui.category.value : undefined, text, rects };
+  state.detailId = page.id;
+  state.picked = null;
+  commit(addMark(pages(), page.id, mark), { animate: false });
+  state.markId = mark.id;
+  renderDetails();
+  announce(kind === "private" ? `Marked ${text || "an area"} as private.` : `Highlighted ${text || "an area"}.`);
+}
+
+function detailKey(event) {
+  const key = event.key;
+  const mod = event.ctrlKey || event.metaKey;
+  const list = pages();
+  const index = indexOf(state.detailId);
+  if (mod || event.altKey) return;
+  if (key === "ArrowLeft") {
+    event.preventDefault();
+    goDetail(index - 1);
+  } else if (key === "ArrowRight") {
+    event.preventDefault();
+    goDetail(index + 1);
+  } else if (key === "Home" && !event.target.closest?.("input, select")) {
+    event.preventDefault();
+    goDetail(0);
+  } else if (key === "End" && !event.target.closest?.("input, select")) {
+    event.preventDefault();
+    goDetail(list.length - 1);
+  } else if (key.toLowerCase() === "h") {
+    event.preventDefault();
+    setTool("highlight");
+  } else if (key.toLowerCase() === "p") {
+    event.preventDefault();
+    setTool("private");
+  } else if (key.toLowerCase() === "s" || key.toLowerCase() === "v") {
+    event.preventDefault();
+    setTool("select");
+  } else if (key.toLowerCase() === "r") {
+    event.preventDefault();
+    rotateInDetails(state.detailId, event.shiftKey ? -90 : 90);
+  } else if ((key === "Delete" || key === "Backspace") && state.picked) {
+    event.preventDefault();
+    deletePicked();
+  } else if ((key === "Delete" || key === "Backspace") && state.markId) {
+    event.preventDefault();
+    deleteMark(state.detailId, state.markId);
+  }
+}
+
+$("view-arrange").addEventListener("click", showArrange);
+$("view-details").addEventListener("click", () => showDetails());
+$("tool-highlight").addEventListener("click", () => setTool("highlight"));
+$("tool-private").addEventListener("click", () => setTool("private"));
+$("tool-select").addEventListener("click", () => setTool("select"));
+
+// Quick access: type a page number.
+ui.pageInput.addEventListener("change", () => {
+  const n = Math.round(Number(ui.pageInput.value));
+  if (Number.isFinite(n) && n >= 1) goDetail(n - 1);
+  ui.pageInput.value = indexOf(state.detailId) + 1;
+});
+ui.pageInput.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") ui.pageInput.blur();
+});
+ui.pageInput.addEventListener("focus", () => ui.pageInput.select());
+
+let resizeTimer = 0;
+addEventListener("resize", () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => state.view === "details" && renderDetails(), 120);
+});
+
 // ---------------------------------------------------------------------------------------------
 // Toolbar, start over, thumbnail size
 
@@ -793,6 +1841,21 @@ ui.clearAll.addEventListener("click", async () => {
   state.focusId = null;
   state.anchor = null;
   state.dirty = false;
+  state.view = "arrange";
+  state.detailId = null;
+  state.markId = null;
+  state.picked = null;
+  setTool("select");
+  detail.sheetKey = "";
+  detail.sheets.clear();
+  ui.stage.replaceChildren();
+  detail.items.clear();
+  detail.objects.clear();
+  detail.objectPromises.clear();
+  for (const pdf of edited.values()) pdf.then((doc) => doc.destroy(), () => {});
+  edited.clear();
+  detail.filmKey = "";
+  ui.filmstrip.replaceChildren();
   previews.clear();
   for (const card of cards.values()) previewObserver.unobserve(card);
   cards.clear();

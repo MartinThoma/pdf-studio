@@ -44,6 +44,10 @@ export class PreviewRenderer {
         else this.queue.push(job);
       });
       this.cache.set(key, promise);
+      // A failed preview is not kept, so that it is tried again when the page is shown again.
+      promise.then((url) => {
+        if (!url && this.cache.get(key) === promise) this.cache.delete(key);
+      });
       this.pump();
     }
     return this.cache.get(key);
@@ -85,4 +89,83 @@ export class PreviewRenderer {
     this.cache.clear();
     this.queue = [];
   }
+}
+
+/**
+ * Draws a page large into `canvas` (width in CSS pixels, sharp on dense screens). Resolves with
+ * { cancel } right away; `done` resolves when the drawing is finished (or was cancelled).
+ */
+export function drawPage(documentPromise, index, canvas, cssWidth) {
+  let task = null;
+  let cancelled = false;
+  const done = (async () => {
+    const pdf = await documentPromise;
+    const page = await pdf.getPage(index + 1);
+    if (cancelled) return false;
+    const natural = page.getViewport({ scale: 1 });
+    const ratio = Math.min(window.devicePixelRatio || 1, 2);
+    const viewport = page.getViewport({ scale: (cssWidth * ratio) / natural.width });
+    canvas.width = Math.round(viewport.width);
+    canvas.height = Math.round(viewport.height);
+    const context = canvas.getContext("2d", { alpha: false });
+    context.fillStyle = "#fff";
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    task = page.render({ canvasContext: context, viewport });
+    try {
+      await task.promise;
+    } catch (error) {
+      if (error?.name === "RenderingCancelledException") return false;
+      throw error;
+    }
+    page.cleanup();
+    return true;
+  })();
+  return {
+    done,
+    cancel() {
+      cancelled = true;
+      task?.cancel();
+    },
+  };
+}
+
+/**
+ * The text of a page as pieces with their boxes in fractions of the page as drawn (see
+ * annotations.js: textInRect). Empty for scanned pages.
+ */
+export async function pageText(documentPromise, index) {
+  const pdf = await documentPromise;
+  const page = await pdf.getPage(index + 1);
+  const viewport = page.getViewport({ scale: 1 });
+  const content = await page.getTextContent();
+  const items = [];
+  for (const item of content.items) {
+    if (!item.str || !item.transform) continue;
+    const [a, b, c, d, e, f] = item.transform;
+    const along = Math.hypot(a, b) || 1;
+    const up = Math.hypot(c, d) || 1;
+    const height = item.height || up;
+    // Corners in PDF space: along the baseline, and up from slightly below it.
+    const ux = a / along, uy = b / along, vx = c / up, vy = d / up;
+    const corners = [[0, -0.2], [item.width, -0.2], [0, 1], [item.width, 1]].map(([s, t]) => {
+      const x = e + ux * s + vx * t * height;
+      const y = f + uy * s + vy * t * height;
+      return viewport.convertToViewportPoint(x, y);
+    });
+    const xs = corners.map(([x]) => x / viewport.width);
+    const ys = corners.map(([, y]) => y / viewport.height);
+    const start = viewport.convertToViewportPoint(e, f);
+    const end = viewport.convertToViewportPoint(e + ux * item.width, f + uy * item.width);
+    const dx = end[0] - start[0];
+    const dy = end[1] - start[1];
+    const axis = Math.abs(dx) >= Math.abs(dy) ? "x" : "y";
+    items.push({
+      str: item.str,
+      box: [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)],
+      axis,
+      reversed: axis === "x" ? dx < 0 : dy < 0,
+    });
+  }
+  page.cleanup();
+  return items;
 }

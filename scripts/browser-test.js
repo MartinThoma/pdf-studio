@@ -11,7 +11,9 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
+import { PDFArray, PDFDocument, PDFName } from "../vendor/pdf-lib/pdf-lib.esm.min.js";
 import { describe, makeEncryptedPdf, makePdf } from "../tests/fixtures.js";
+import { contentBytes, pageObjects } from "../src/content.js";
 import { writeManifest } from "./build-manifest.js";
 import { startServer } from "./serve.js";
 
@@ -165,6 +167,173 @@ try {
   await page.emulateMedia({ colorScheme: "light" });
   await page.keyboard.press("Escape");
   assert.equal(await page.locator("#selection-actions").isVisible(), false);
+
+  step("details view: go through the pages");
+  await page.keyboard.press("Escape");
+  await card(2).dblclick();
+  await page.waitForSelector("#details:not([hidden])");
+  assert.equal(await page.locator("#d-page").inputValue(), "2");
+  await page.keyboard.press("ArrowRight");
+  assert.equal(await page.locator("#d-page").inputValue(), "3");
+  assert.equal(await page.locator("#d-count").textContent(), "5");
+  await page.locator(".film-item").nth(1).click();
+  assert.equal(await page.locator("#d-page").inputValue(), "2");
+  await page.waitForFunction(() => document.querySelector(".stage-item.is-current canvas").width > 300);
+
+  step("details view: scrolling down reaches the next page");
+  const currentTop = await page.locator(".stage-item").nth(2).boundingBox();
+  await page.evaluate((y) => scrollBy(0, y), currentTop.y - 150);
+  await page.waitForFunction(() => document.getElementById("d-page").value === "3");
+  await page.waitForFunction(() => document.querySelector(".stage-item.is-current canvas").width > 300);
+  await page.locator(".film-item").nth(1).click();
+  assert.equal(await page.locator("#d-page").inputValue(), "2");
+  await page.waitForTimeout(300);
+
+  step("details view: type a page number");
+  await page.fill("#d-page", "4");
+  await page.keyboard.press("Enter");
+  assert.equal(await page.locator(".film-item").nth(3).getAttribute("aria-current"), "page");
+  await page.fill("#d-page", "2");
+  await page.keyboard.press("Enter");
+  assert.equal(await page.locator(".film-item").nth(1).getAttribute("aria-current"), "page");
+  await page.waitForTimeout(300);
+
+  step("details view: rotate a page from the menu of the strip");
+  await page.locator(".film-item").nth(1).click({ button: "right" });
+  await page.click('#page-menu [data-action="rotate-right"]');
+  assert.equal(await page.locator("#page-menu").isVisible(), false);
+  assert.equal((await order())[1], "s1:3:90");
+  const turnedBox = await page.locator(".stage-item.is-current").boundingBox();
+  assert.ok(turnedBox.width > turnedBox.height, "the rotated page is shown landscape");
+  await page.keyboard.press("Shift+R");
+  assert.equal((await order())[1], "s1:3:0");
+  await settle();
+  await page.waitForTimeout(300);
+
+  step("details view: mark a name as private and highlight another text");
+  await page.keyboard.press("p");
+  assert.equal(await page.locator("#tool-private").getAttribute("aria-pressed"), "true");
+  const sheet = await page.locator(".stage-item.is-current .sheet").boundingBox();
+  const at = (u, v) => [sheet.x + u * sheet.width, sheet.y + v * sheet.height];
+  const drag = async (from, to) => {
+    await page.mouse.move(...at(...from));
+    await page.mouse.down();
+    await page.mouse.move(...at(...to), { steps: 6 });
+    await page.mouse.up();
+  };
+  await drag([0.04, 0.42], [0.8, 0.56]);
+  await page.waitForSelector(".mark-row.private");
+  assert.equal(await page.locator('.mark-row.private input[aria-label="Text under the mark"]').inputValue(), "Report 4");
+  assert.match(await page.locator(".mark-row .token").textContent(), /\[NAME_1\]/);
+  await page.locator('.mark-row.private input[aria-label="Comment"]').fill("the patient");
+  await page.locator('.mark-row.private input[aria-label="Comment"]').press("Enter");
+  await page.keyboard.press("h");
+  await drag([0.04, 0.05], [0.5, 0.12]); // the coloured band, no text
+  await page.waitForSelector(".mark-row.is-current:not(.private)");
+  assert.equal(await page.locator(".mark-row").count(), 2);
+  await page.locator(".mark-row.private select").selectOption("address");
+  assert.match(await page.locator(".mark-row .token").first().textContent(), /\[ADDRESS_1\]/);
+  await page.locator(".mark-row.private select").selectOption("name");
+  await page.keyboard.press("Escape");
+  assert.equal(await page.locator("#tool-highlight").getAttribute("aria-pressed"), "false");
+  await page.waitForTimeout(400);
+  await page.screenshot({ path: join(DOCS, "screenshot-details.png") });
+
+  step("arrange view shows the marks; undo removes the last one");
+  await page.click("#view-arrange");
+  assert.equal(await card(2).locator(".page-flags span").count(), 2);
+  assert.match(await page.locator("#summary").textContent(), /1 private mark/);
+  for (let i = 0; i < 3; i++) await page.click("#undo"); // category twice, then the highlight
+  assert.equal(await card(2).locator(".page-flags span").count(), 1);
+  for (let i = 0; i < 3; i++) await page.click("#redo");
+
+  step("privacy list and PDF contain the mark");
+  const [listDownload] = await Promise.all([page.waitForEvent("download"), page.click("#privacy-list")]);
+  const list = JSON.parse(readFileSync(await listDownload.path(), "utf8"));
+  assert.equal(list.format, "pdf-studio-privacy/1");
+  assert.equal(list.entries.length, 1);
+  assert.equal(list.entries[0].page, 2);
+  assert.equal(list.entries[0].text, "Report 4");
+  assert.equal(list.entries[0].comment, "the patient");
+  assert.deepEqual(list.replacements, { "[NAME_1]": "Report 4" });
+  const [marked] = await Promise.all([page.waitForEvent("download"), page.click("#download")]);
+  const markedPdf = await PDFDocument.load(readFileSync(await marked.path()));
+  const annots = markedPdf.getPages()[1].node.lookup(PDFName.of("Annots"), PDFArray).asArray();
+  assert.equal(annots.length, 2);
+  const annot = markedPdf.context.lookup(annots[0]);
+  assert.equal(annot.get(PDFName.of("Contents")).decodeText(), "Report 4");
+  await page.screenshot({ path: join(DOCS, "screenshot.png") });
+
+  step("details view: select a text and change it");
+  await page.click("#view-details");
+  await page.locator(".film-item").nth(4).click();
+  assert.equal(await page.locator("#d-page").inputValue(), "5");
+  await page.waitForFunction(() => document.querySelector(".stage-item.is-current canvas").width > 300);
+  const last = await page.locator(".stage-item.is-current .sheet").boundingBox();
+  const spot = [last.x + 0.15 * last.width, last.y + 0.47 * last.height];
+  await page.mouse.move(spot[0] - 5, spot[1]);
+  await page.mouse.move(...spot);
+  await page.waitForSelector(".stage-item.is-current .object-hover:not([hidden])");
+  await page.mouse.click(...spot);
+  await page.waitForSelector("#pick-panel:not([hidden])");
+  assert.match(await page.locator("#pick-what").textContent(), /Text on page 5/);
+  await page.waitForFunction(() => document.getElementById("pick-text").value === "Appendix 1");
+  await page.fill("#pick-text", "Changed");
+  await page.keyboard.press("Enter");
+  assert.deepEqual(await page.evaluate(() => Object.values(window.pdfStudio.pages()[4].edits)), ["Changed"]);
+  await page.mouse.click(last.x + 0.9 * last.width, last.y + 0.9 * last.height); // nothing there
+  assert.equal(await page.locator("#pick-panel").isVisible(), false);
+  await page.waitForTimeout(600); // the page is drawn again with the new text
+  await page.screenshot({ path: join(ROOT, "test-output", "edited.png") });
+
+  step("details view: select a text on a rotated page and delete it");
+  await page.locator(".film-item").nth(0).click();
+  await page.waitForFunction(() => document.querySelector(".stage-item.is-current canvas").width > 300);
+  await page.evaluate(() => scrollBy(0, 450)); // the text is in the lower part of the tall page
+  await page.waitForTimeout(200);
+  const first = await page.locator(".stage-item").nth(0).boundingBox();
+  // The page is turned 270°: the point (0.15, 0.47) of the page is at (0.47, 0.85) of what is shown.
+  await page.mouse.click(first.x + 0.47 * first.width, first.y + 0.85 * first.height);
+  await page.waitForSelector("#pick-panel:not([hidden])");
+  await page.keyboard.press("Delete");
+  await page.waitForFunction(() => window.pdfStudio.pages()[0].removed?.length === 1);
+  assert.match(await lastToast().textContent(), /Deleted 1 object/);
+
+  step("details view: delete a mark with its button; move and delete pages in the strip; undo");
+  await page.locator(".film-item").nth(1).click();
+  await page.waitForTimeout(200);
+  const markBox = await page.locator(".stage-item.is-current .mark.private").boundingBox();
+  await page.mouse.click(markBox.x + markBox.width / 2, markBox.y + markBox.height / 2);
+  await page.locator(".stage-item.is-current .mark-delete").click();
+  assert.equal(await page.evaluate(() => window.pdfStudio.pages()[1].marks.length), 1);
+  await page.keyboard.press("Control+z");
+  assert.equal(await page.evaluate(() => window.pdfStudio.pages()[1].marks.length), 2);
+  const fromItem = await page.locator(".film-item").nth(4).boundingBox();
+  const toItem = await page.locator(".film-item").nth(0).boundingBox();
+  await page.mouse.move(fromItem.x + fromItem.width / 2, fromItem.y + fromItem.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(toItem.x + toItem.width / 2, toItem.y + 4, { steps: 8 });
+  assert.equal(await page.locator(".film-marker").isVisible(), true);
+  await page.mouse.up();
+  assert.equal((await order())[0], "s2:0:0");
+  await page.keyboard.press("Control+z");
+  assert.equal((await order())[4], "s2:0:0");
+  await page.locator(".film-item").nth(1).hover();
+  await page.locator(".film-item").nth(1).locator(".film-delete").click();
+  assert.equal((await order()).length, 4);
+  assert.equal(await page.locator("#d-count").textContent(), "4");
+  await page.keyboard.press("Control+z");
+  assert.equal((await order()).length, 5);
+
+  step("the saved file has the changed text and not the deleted one");
+  const [erased] = await Promise.all([page.waitForEvent("download"), page.click("#download")]);
+  const erasedPdf = await PDFDocument.load(readFileSync(await erased.path()));
+  assert.equal(pageObjects(erasedPdf.getPage(0)).filter((o) => o.type === "text").length, 0);
+  assert.equal(pageObjects(erasedPdf.getPage(4)).filter((o) => o.type === "text").length, 1);
+  const lastContent = new TextDecoder("latin1").decode(contentBytes(erasedPdf.getPage(4)));
+  assert.ok(lastContent.includes("4368616E676564"), "the new text is in the file");
+  await page.click("#view-arrange");
+  assert.equal(await card(5).locator(".page-flags .rm").count(), 1);
 
   step("download and check the result");
   const result = await downloadResult();

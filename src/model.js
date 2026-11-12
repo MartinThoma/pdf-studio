@@ -7,6 +7,9 @@
 //   sourceId  the uploaded file it comes from
 //   index     0-based page number in that file
 //   rotation  extra clockwise rotation the user added: 0, 90, 180 or 270
+//   marks     optional: highlights and privacy marks on this page (see annotations.js)
+//   removed   optional: ids of objects deleted from this page (see content.js)
+//   edits     optional: new text for text runs of this page, { objectId: text }
 
 let nextId = 1;
 
@@ -53,6 +56,53 @@ export function remove(pages, ids) {
 /** 0, 90, 180 or 270 for any multiple of 90, also negative ones. */
 export function normalizeRotation(degrees) {
   return ((Math.round(degrees / 90) * 90) % 360 + 360) % 360;
+}
+
+let nextMark = 1;
+
+/** A new mark id, unique in this session. */
+export const newMarkId = () => `m${nextMark++}`;
+
+/** Adds a mark to a page. */
+export function addMark(pages, pageId, mark) {
+  return pages.map((page) => (page.id === pageId ? { ...page, marks: [...(page.marks ?? []), mark] } : page));
+}
+
+/** Changes fields of a mark (text, category, …). */
+export function updateMark(pages, pageId, markId, changes) {
+  return pages.map((page) =>
+    page.id === pageId
+      ? { ...page, marks: (page.marks ?? []).map((mark) => (mark.id === markId ? { ...mark, ...changes } : mark)) }
+      : page,
+  );
+}
+
+/** Removes a mark from a page. */
+export function removeMark(pages, pageId, markId) {
+  return pages.map((page) =>
+    page.id === pageId ? { ...page, marks: (page.marks ?? []).filter((mark) => mark.id !== markId) } : page,
+  );
+}
+
+/** Deletes objects of the page's content (by id) and marks (by id) in one step. */
+export function erase(pages, pageId, { objects = [], marks = [] }) {
+  if (objects.length === 0 && marks.length === 0) return pages;
+  const gone = new Set(marks);
+  return pages.map((page) =>
+    page.id === pageId
+      ? {
+          ...page,
+          removed: [...new Set([...(page.removed ?? []), ...objects])],
+          edits: Object.fromEntries(Object.entries(page.edits ?? {}).filter(([id]) => !objects.includes(id))),
+          marks: (page.marks ?? []).filter((mark) => !gone.has(mark.id)),
+        }
+      : page,
+  );
+}
+
+/** Replaces the text of a text run of the page. */
+export function editText(pages, pageId, objectId, text) {
+  return pages.map((page) => (page.id === pageId ? { ...page, edits: { ...(page.edits ?? {}), [objectId]: text } } : page));
 }
 
 /** Undo and redo for the page list. Each state is an array returned by the functions above. */

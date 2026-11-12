@@ -2,6 +2,7 @@
 // and saving large files never blocks the page. Protocol: see worker-client.js.
 
 import { assemble, loadSource } from "./assemble.js";
+import { pageObjects } from "./content.js";
 
 const sources = new Map();
 
@@ -16,6 +17,13 @@ self.addEventListener("message", async ({ data }) => {
       result = { pages };
     } else if (type === "export") {
       const bytes = await assemble(sources, data.pages);
+      result = { bytes };
+      transfer.push(bytes.buffer);
+    } else if (type === "objects") {
+      result = { objects: pageObjects(sources.get(data.sourceId).getPage(data.index)) };
+    } else if (type === "preview") {
+      // One page with objects deleted, for the editor to draw.
+      const bytes = await assemble(sources, [{ sourceId: data.sourceId, index: data.index, rotation: 0, removed: data.removed, edits: data.edits }]);
       result = { bytes };
       transfer.push(bytes.buffer);
     } else if (type === "reset") {

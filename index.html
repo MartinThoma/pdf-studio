@@ -31,6 +31,15 @@
     <symbol id="i-check" viewBox="0 0 24 24"><path d="m5.5 12.5 4 4 9-9" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
     <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M9.6 9.6a2.5 2.5 0 1 1 3.4 2.3c-.6.3-1 .8-1 1.5v.4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><circle cx="12" cy="16.9" r="1" fill="currentColor"/></symbol>
     <symbol id="i-file" viewBox="0 0 48 48"><path d="M14 6h15l9 9v25a3 3 0 0 1-3 3H14a3 3 0 0 1-3-3V9a3 3 0 0 1 3-3Z" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round"/><path d="M29 6v9h9M24 21v13m-5.5-5.5L24 34l5.5-5.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-highlight" viewBox="0 0 24 24"><path d="m14.5 4.5 5 5-8.2 8.2H6.5v-4.8l8-8.4Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M4 21h9" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3.5 5 6v5.5c0 4.2 2.8 7.3 7 9 4.2-1.7 7-4.8 7-9V6l-7-2.5Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M8.8 12h6.4" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></symbol>
+    <symbol id="i-grid" viewBox="0 0 24 24"><rect x="4" y="4" width="6.5" height="6.5" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.7"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.7"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.7"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.7"/></symbol>
+    <symbol id="i-details" viewBox="0 0 24 24"><rect x="3.5" y="4" width="5" height="16" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.7"/><rect x="11" y="4" width="9.5" height="16" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.7"/></symbol>
+    <symbol id="i-prev" viewBox="0 0 24 24"><path d="m14.5 6-6 6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-next" viewBox="0 0 24 24"><path d="m9.5 6 6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-list" viewBox="0 0 24 24"><path d="M9 6.5h10.5M9 12h10.5M9 17.5h10.5M4.5 6.5h.01M4.5 12h.01M4.5 17.5h.01" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+    <symbol id="i-select" viewBox="0 0 24 24"><path d="M5.5 3.5 18 12.2l-5.4 1.2 3.2 6-2.3 1.2-3.2-6-3.9 3.7-.9-14.8Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></symbol>
+    <symbol id="i-open" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="5.5" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="m15 15 4.5 4.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
   </svg>
 
   <header class="topbar">
@@ -63,6 +72,14 @@
   </header>
 
   <div class="contextbar" id="contextbar" hidden>
+    <div class="view-switch" role="group" aria-label="View">
+      <button type="button" class="button small" id="view-arrange" aria-pressed="true" title="Arrange: all pages as a grid (G)">
+        <svg aria-hidden="true"><use href="#i-grid"/></svg><span class="label">Arrange</span>
+      </button>
+      <button type="button" class="button small" id="view-details" aria-pressed="false" title="Details: one page at a time, to highlight and mark (D)">
+        <svg aria-hidden="true"><use href="#i-details"/></svg><span class="label">Details</span>
+      </button>
+    </div>
     <div class="summary" id="summary"></div>
     <div class="selection-actions" id="selection-actions" hidden>
       <span class="selection-count" id="selection-count"></span>
@@ -80,12 +97,15 @@
       </button>
     </div>
     <div class="view-controls">
-      <label class="size-control" title="Thumbnail size">
+      <label class="size-control" id="size-control" title="Thumbnail size">
         <span class="visually-hidden">Thumbnail size</span>
         <svg aria-hidden="true" class="size-small"><use href="#i-logo"/></svg>
         <input type="range" id="thumb-size" min="96" max="264" step="8" value="168">
         <svg aria-hidden="true" class="size-large"><use href="#i-logo"/></svg>
       </label>
+      <button type="button" class="button small" id="privacy-list" hidden title="Download the list of private marks (JSON) for pseudonymizing tools">
+        <svg aria-hidden="true"><use href="#i-list"/></svg><span class="label">Privacy list</span>
+      </button>
       <button type="button" class="button small ghost" id="clear-all">Start over</button>
     </div>
   </div>
@@ -105,8 +125,64 @@
       </div>
     </section>
 
+    <section class="details" id="details" hidden aria-label="Page details">
+      <nav class="filmstrip" id="filmstrip" aria-label="All pages"></nav>
+      <div class="detail-main">
+        <div class="detail-bar">
+          <label class="pager" title="Type a page number to go there">
+            <span class="visually-hidden">Go to page</span>
+            <input type="text" inputmode="numeric" id="d-page" autocomplete="off" aria-label="Page number">
+            <span class="of">of <span id="d-count"></span></span>
+          </label>
+          <div class="tools" role="group" aria-label="Tools">
+            <button type="button" class="button small tool" id="tool-select" aria-pressed="true" title="Select: click a text, an image, an annotation or a mark to change or delete it; drag around several (S)">
+              <svg aria-hidden="true"><use href="#i-select"/></svg><span class="label">Select</span>
+            </button>
+            <button type="button" class="button small tool" id="tool-highlight" aria-pressed="false" title="Highlight: drag over text (H)">
+              <svg aria-hidden="true"><use href="#i-highlight"/></svg><span class="label">Highlight</span>
+            </button>
+            <button type="button" class="button small tool private" id="tool-private" aria-pressed="false" title="Mark as private: drag over a name or other personal data (P)">
+              <svg aria-hidden="true"><use href="#i-shield"/></svg><span class="label">Mark private</span>
+            </button>
+            <label class="category" title="What the next private mark is">
+              <span class="visually-hidden">Category of private marks</span>
+              <select id="private-category"></select>
+            </label>
+          </div>
+          <p class="tool-hint" id="tool-hint">Click a text, an image or a mark to select it, then change or delete it on the right.</p>
+        </div>
+        <div class="stage-wrap" id="stage-wrap">
+          <div class="stage" id="stage"></div>
+        </div>
+      </div>
+      <aside class="marklist" aria-labelledby="marklist-title">
+        <section class="pick-panel" id="pick-panel" hidden aria-labelledby="pick-title">
+          <h2 id="pick-title">Selected</h2>
+          <p class="what" id="pick-what"></p>
+          <div class="pick-text" id="pick-text-row">
+            <label for="pick-text">Text</label>
+            <input type="text" id="pick-text" autocomplete="off">
+            <button type="button" class="button small" id="pick-apply">Change text</button>
+            <p class="note">The new text is set in a standard font at the same place and size, so it can look a little different.</p>
+          </div>
+          <button type="button" class="button small danger" id="pick-delete" title="Delete what is selected (Del)">
+            <svg aria-hidden="true"><use href="#i-trash"/></svg><span class="label">Delete</span>
+          </button>
+        </section>
+        <h2 id="marklist-title">Marks on this page</h2>
+        <ul id="mark-items"></ul>
+        <p class="none" id="mark-none">None yet.</p>
+      </aside>
+    </section>
+
     <ul class="pages" id="pages" role="listbox" aria-label="Pages" aria-multiselectable="true" hidden></ul>
   </main>
+
+  <div class="menu" id="page-menu" role="menu" aria-label="Page" hidden>
+    <button type="button" role="menuitem" data-action="rotate-left"><svg aria-hidden="true"><use href="#i-rotate-left"/></svg>Rotate left</button>
+    <button type="button" role="menuitem" data-action="rotate-right"><svg aria-hidden="true"><use href="#i-rotate-right"/></svg>Rotate right</button>
+    <button type="button" role="menuitem" data-action="delete" class="danger"><svg aria-hidden="true"><use href="#i-trash"/></svg>Delete page</button>
+  </div>
 
   <div class="drop-overlay" id="drop-overlay" aria-hidden="true">
     <div><svg aria-hidden="true"><use href="#i-file"/></svg><p>Drop to add the PDFs</p></div>
@@ -146,9 +222,14 @@
         <dt><kbd>Ctrl</kbd> + <kbd>Z</kbd> / <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>Z</kbd></dt><dd>Undo / redo</dd>
         <dt><kbd>Ctrl</kbd> + <kbd>O</kbd></dt><dd>Add PDF files</dd>
         <dt><kbd>Ctrl</kbd> + <kbd>S</kbd></dt><dd>Download the result</dd>
-        <dt><kbd>Esc</kbd></dt><dd>Clear the selection, cancel dragging</dd>
+        <dt><kbd>Esc</kbd></dt><dd>Clear the selection, cancel dragging, put the tool away</dd>
+        <dt><kbd>D</kbd> / <kbd>G</kbd></dt><dd>Details view / Arrange view</dd>
+        <dt>Details: <kbd>←</kbd> <kbd>→</kbd></dt><dd>Previous / next page</dd>
+        <dt>Details: <kbd>S</kbd> / <kbd>H</kbd> / <kbd>P</kbd></dt><dd>Select tool / highlight tool / mark-private tool</dd>
+        <dt>Details: <kbd>Del</kbd></dt><dd>Delete the selected objects</dd>
+        <dt>Details: <kbd>R</kbd> / <kbd>Shift</kbd> + <kbd>R</kbd></dt><dd>Rotate the page right / left</dd>
       </dl>
-      <p class="hint">With the mouse: drag pages to reorder them. <kbd>Ctrl</kbd>-click or <kbd>Shift</kbd>-click selects several. On a touch screen, tap to select and press and hold to drag.</p>
+      <p class="hint">In the Details view, drag over text with the Highlight or Mark private tool. Private marks are saved in the PDF as annotations that pseudonymizing tools can find, and the Privacy list button saves them as JSON. With the mouse: drag pages to reorder them. <kbd>Ctrl</kbd>-click or <kbd>Shift</kbd>-click selects several. On a touch screen, tap to select and press and hold to drag.</p>
     </form>
   </dialog>
 </body>

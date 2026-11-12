@@ -11,6 +11,14 @@ After the first visit it works offline, and it can be installed as an app.
 - **Open** one or more PDFs: drop them anywhere on the page, or use *Add PDFs*.
 - **Reorder** by dragging pages; select several pages to move them together.
 - **Rotate** left or right, **delete** pages; every page shows where it comes from.
+- **Details view**: one page large, with a strip of all pages to go through them (arrow keys,
+  <kbd>D</kbd> / <kbd>G</kbd> switch between *Details* and *Arrange*).
+- **Highlight** text, and **mark private parts** (names, addresses, contact data, numbers) by
+  dragging over them. See [Privacy marks](#privacy-marks).
+- **Select objects** in the Details view and change or delete them: text, images, annotations
+  the PDF came with, and your own marks. See [Changing and deleting objects](#changing-and-deleting-objects).
+- **Page operations in the Details view** are in the strip on the left: drag a page to move it,
+  hover for the bin, right-click to rotate or delete. Type a page number to jump there.
 - **Undo and redo** for every change.
 - **Download** the result as a new PDF.
 - **Keyboard**: arrows to move around, <kbd>Ctrl</kbd>+arrows to move pages, <kbd>R</kbd> to
@@ -21,6 +29,73 @@ After the first visit it works offline, and it can be installed as an app.
   internet. Chrome, Edge and Android show their install prompt; on Safari and Firefox the button
   explains the steps.
 - Light and dark mode, phone to desktop.
+
+## Privacy marks
+
+In the Details view, pick *Mark private* (<kbd>P</kbd>), choose what it is (name, address, email /
+phone, ID / number, other) and drag over the text. The marked text is read from the page; if there
+is none (a scan) type it into the list on the right. Every mark also has a comment field there. Marks are saved with the PDF as standard
+highlight annotations, so every viewer shows them, and in the list as JSON (*Privacy list*), so a
+pseudonymizing tool does not have to read the PDF at all.
+
+![Details view with a private mark and a highlight](docs/screenshot-details.png)
+
+**In the PDF**, each private mark is a `/Highlight` annotation with
+- `/Contents`: the marked text, `/Subj`: `Privacy: Name` (or Address, …), `/NM`: a unique id,
+- `/QuadPoints`: one box per line of text,
+- `/PdfStudio`: `<< /Kind /Privacy /Category (name) /Placeholder ([NAME_1]) /Id (…) /Comment (…) >>`.
+
+A highlight's comment is its `/Contents`, so viewers show it as the note; for a private mark `/Contents`
+stays the marked text and the comment is in `/PdfStudio` and in the privacy list.
+
+**In the privacy list** (`…-privacy.json`):
+
+```json
+{
+  "format": "pdf-studio-privacy/1",
+  "replacements": { "[NAME_1]": "Jane Doe", "[ADDRESS_1]": "Hauptstr. 1, Ulm" },
+  "entries": [
+    { "id": "m3", "page": 2, "category": "name", "text": "Jane Doe",
+      "comment": "", "placeholder": "[NAME_1]", "rects": [[72, 640.5, 131.2, 652.5]] }
+  ]
+}
+```
+
+The same text in the same category always gets the same placeholder, so one person stays one
+person across all pages. A tool replaces every `text` by its `placeholder` (pages and rects tell
+where), and `replacements` turns the placeholders back into the originals later. Pages are
+numbered as in the result, coordinates are PDF points with the origin at the bottom left. The
+list contains the private texts in clear: keep it as safe as the original PDF.
+
+Marks only annotate; they do not remove anything. Pages deleted in the editor take their marks
+with them.
+
+## Changing and deleting objects
+
+In the Details view the *Select* tool (<kbd>S</kbd>) is active unless you pick another one. The
+object under the pointer gets a dashed frame; a click selects it, dragging a rectangle selects
+everything whose middle is inside, <kbd>Shift</kbd>-click adds to the selection. Clicking the
+same spot again reaches what lies underneath (the text under a mark). The panel on the right
+then offers what can be done: **change the text** of a text, and **delete** (<kbd>Del</kbd>).
+Undo brings everything back.
+
+- **Deleted text and images are really removed**, not covered: the page's content is rewritten
+  without them, and the data of a deleted image leaves the file unless another page still shows
+  it. The editor then draws the rewritten page, so what you see is what the download contains.
+- **Changed text** replaces the old text, which is removed the same way. The new text is set in
+  the standard font closest to the old one (Helvetica, Times or Courier, bold and italic kept),
+  at the same place, size, direction and colour, so it can look a little different, and it is
+  not fitted to the old width. Characters outside Western European text become "?".
+- Text comes in the pieces the PDF stores it in. Depending on the program that made the PDF,
+  one piece is a line, a word or sometimes a single letter; drag a rectangle to take several.
+  The text after a deleted piece keeps its place.
+- **Annotations** that were already in the PDF (comments, links, form fields, highlights) can be
+  deleted the same way.
+- Not possible yet: vector drawings (lines, shapes, charts), and single parts of a *group* (a
+  form XObject, e.g. a placed logo or an imported page), which can only be deleted as a whole.
+  The frame shows what a click will take.
+- The font data stays in the file, so a deleted name leaves no text, but the letter shapes of
+  an embedded font may remain.
 
 ## Privacy
 

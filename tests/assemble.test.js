@@ -12,9 +12,9 @@ async function sources(entries) {
 test("loadSource reports size and own rotation of each page", async () => {
   const { pages } = await loadSource(await makePdf({ count: 3, rotations: [0, 90, 0] }));
   assert.deepEqual(pages, [
-    { width: 200, height: 300, rotation: 0 },
-    { width: 210, height: 300, rotation: 90 },
-    { width: 220, height: 300, rotation: 0 },
+    { width: 200, height: 300, rotation: 0, box: { x: 0, y: 0, width: 200, height: 300 } },
+    { width: 210, height: 300, rotation: 90, box: { x: 0, y: 0, width: 210, height: 300 } },
+    { width: 220, height: 300, rotation: 0, box: { x: 0, y: 0, width: 220, height: 300 } },
   ]);
 });
 
