@@ -12,11 +12,11 @@ self.addEventListener("message", async ({ data }) => {
     let result = {};
     const transfer = [];
     if (type === "add") {
-      const { doc, pages } = await loadSource(data.bytes);
+      const { doc, pages } = await loadSource(data.bytes, { password: data.password });
       sources.set(data.sourceId, doc);
       result = { pages };
     } else if (type === "export") {
-      const bytes = await assemble(sources, data.pages);
+      const bytes = await assemble(sources, data.pages, { password: data.password });
       result = { bytes };
       transfer.push(bytes.buffer);
     } else if (type === "objects") {
@@ -37,6 +37,6 @@ self.addEventListener("message", async ({ data }) => {
     }
     self.postMessage({ callId, ok: true, result }, transfer);
   } catch (error) {
-    self.postMessage({ callId, ok: false, error: { message: error.message, code: error.code } });
+    self.postMessage({ callId, ok: false, error: { message: error.message, code: error.code, wrong: error.wrong } });
   }
 });

@@ -23,6 +23,8 @@
     <symbol id="i-undo" viewBox="0 0 24 24"><path d="M9 14 4 9l5-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
     <symbol id="i-redo" viewBox="0 0 24 24"><path d="m15 14 5-5-5-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
     <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v11m-4.5-4.5L12 15l4.5-4.5M5 19.5h14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="10.5" width="14" height="9.5" rx="2" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5M12 14.5v2" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></symbol>
+    <symbol id="i-chevron-down" viewBox="0 0 24 24"><path d="m7 10 5 5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
     <symbol id="i-rotate-left" viewBox="0 0 24 24"><path d="M4.5 4.5v5h5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M5.3 14.5A7.5 7.5 0 1 0 6.6 7L4.5 9.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
     <symbol id="i-rotate-right" viewBox="0 0 24 24"><path d="M19.5 4.5v5h-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M18.7 14.5A7.5 7.5 0 1 1 17.4 7l2.1 2.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
     <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4.5 6.5h15M9.5 6.5V4.8c0-.7.6-1.3 1.3-1.3h2.4c.7 0 1.3.6 1.3 1.3v1.7M6.5 6.5l.8 12.1c.1 1 .9 1.9 2 1.9h5.4c1.1 0 1.9-.9 2-1.9l.8-12.1M10 10.5v6M14 10.5v6" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></symbol>
@@ -58,9 +60,14 @@
       <button type="button" class="button" id="add" title="Add PDF files (Ctrl+O)">
         <svg aria-hidden="true"><use href="#i-add"/></svg><span class="label">Add PDFs</span>
       </button>
-      <button type="button" class="button primary" id="download" disabled title="Download the edited PDF (Ctrl+S)">
-        <svg aria-hidden="true"><use href="#i-download"/></svg><span class="label">Download</span>
-      </button>
+      <div class="split">
+        <button type="button" class="button primary" id="download" disabled title="Download the edited PDF (Ctrl+S)">
+          <svg aria-hidden="true"><use href="#i-download"/></svg><span class="label">Download</span>
+        </button>
+        <button type="button" class="button primary caret" id="download-options" disabled aria-haspopup="true" aria-expanded="false" aria-controls="download-panel" title="Download options">
+          <svg aria-hidden="true"><use href="#i-chevron-down"/></svg><span class="label">Download options</span>
+        </button>
+      </div>
       <button type="button" class="button ghost" id="install" title="Install PDF Studio; version">
         <svg aria-hidden="true"><use href="#i-install"/></svg><span class="label">Install</span>
       </button>
@@ -196,6 +203,34 @@
 
   <div class="toasts" id="toasts" role="status" aria-live="polite"></div>
   <div class="visually-hidden" id="announcer" aria-live="assertive"></div>
+
+  <div class="menu download-panel" id="download-panel" role="group" aria-label="Download options" hidden>
+    <label class="field"><span>File name</span>
+      <input type="text" class="text-input" id="file-name" spellcheck="false" autocomplete="off" enterkeyhint="done">
+    </label>
+    <label class="option"><input type="checkbox" id="protect"><span>Protect with a password</span></label>
+    <div class="protect-fields" id="protect-fields" hidden>
+      <input type="password" class="text-input" id="protect-password" placeholder="Password" aria-label="Password" autocomplete="new-password" spellcheck="false">
+      <label class="option"><input type="checkbox" id="protect-show"><span>Show password</span></label>
+      <p>Encrypted with AES-256 when you download. The password is not stored: if you forget it, nobody can open the file.</p>
+    </div>
+  </div>
+
+  <dialog id="password-dialog" aria-labelledby="password-title">
+    <form method="dialog" id="password-form">
+      <header><h2 id="password-title">Password needed</h2></header>
+      <p id="password-file"></p>
+      <label class="field"><span>Password</span>
+        <input type="password" class="text-input" id="open-password" autocomplete="current-password" spellcheck="false" required enterkeyhint="go">
+      </label>
+      <p class="field-error" id="password-wrong" role="alert" hidden>That password is not right. Try again.</p>
+      <label class="option"><input type="checkbox" id="open-password-show"><span>Show password</span></label>
+      <div class="dialog-actions">
+        <button type="button" class="button" id="password-skip">Skip this file</button>
+        <button type="submit" class="button primary">Open</button>
+      </div>
+    </form>
+  </dialog>
 
   <dialog id="install-dialog" aria-labelledby="install-title">
     <form method="dialog">

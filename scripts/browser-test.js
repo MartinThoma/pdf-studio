@@ -25,6 +25,7 @@ const files = {
   report: join(tmp, "report.pdf"),
   appendix: join(tmp, "appendix.pdf"),
   locked: join(tmp, "locked.pdf"),
+  protected: join(tmp, "protected.pdf"),
   notes: join(tmp, "notes.txt"),
 };
 // report.pdf: widths 200, 210 (own /Rotate 90), 220, 230; appendix.pdf: widths 400, 410.
@@ -365,10 +366,58 @@ try {
   );
   assert.equal(result.pageObjects, 5, "the deleted page must not be in the file");
 
-  step("encrypted file and non-PDF are rejected with a message");
+  step("password protection is applied to the download");
+  await page.click("#download-options");
+  await page.check("#protect");
+  await page.fill("#protect-password", "s3cret");
+  await page.press("#protect-password", "Enter"); // closes the options, keeps the password
+  assert.equal(await page.isHidden("#download-panel"), true);
+  assert.equal(await page.getAttribute("#download use", "href"), "#i-lock");
+  const [locked] = await Promise.all([page.waitForEvent("download"), page.click("#download")]);
+  const lockedBytes = readFileSync(await locked.path());
+  assert.match(lockedBytes.toString("latin1"), /\/Encrypt/);
+  await assert.rejects(describe(lockedBytes));
+  writeFileSync(files.protected, lockedBytes);
+  await page.click("#download-options");
+  await page.uncheck("#protect");
+  await page.keyboard.press("Escape");
+  assert.equal(await page.getAttribute("#download use", "href"), "#i-download");
+
+  step("a file name typed in the download options");
+  await page.click("#download-options");
+  assert.equal(await page.getAttribute("#file-name", "placeholder"), "report-merged.pdf");
+  await page.fill("#file-name", "Final: report");
+  await page.press("#file-name", "Enter");
+  const [named] = await Promise.all([page.waitForEvent("download"), page.click("#download")]);
+  assert.equal(named.suggestedFilename(), "Final- report.pdf");
+  await page.click("#download-options");
+  await page.fill("#file-name", "");
+  await page.keyboard.press("Escape");
+
+  step("a protected file asks for its password; skipping it adds nothing");
   await page.setInputFiles("#file-input", files.locked);
-  await page.waitForSelector(".toast.error");
-  assert.match(await page.locator(".toast.error").last().textContent(), /protected/);
+  await page.waitForSelector("#password-dialog[open]");
+  assert.match(await page.textContent("#password-file"), /locked\.pdf/);
+  await page.click("#password-skip");
+  await page.waitForSelector("#password-dialog", { state: "hidden" });
+  assert.equal((await order()).length, 5, "nothing added");
+  assert.equal(await page.locator(".toast.error").count(), 0, "skipping is not an error");
+
+  step("a protected file opens with its password, after a wrong one");
+  await page.setInputFiles("#file-input", files.protected);
+  await page.waitForSelector("#password-dialog[open]");
+  await page.fill("#open-password", "wrong");
+  await page.press("#open-password", "Enter");
+  await page.waitForSelector("#password-wrong:not([hidden])");
+  assert.equal(await page.isVisible("#password-dialog"), true);
+  await page.fill("#open-password", "s3cret");
+  await page.press("#open-password", "Enter");
+  await page.waitForFunction(() => window.pdfStudio.pages().length === 10);
+  await waitForPreviews(10);
+  await page.keyboard.press("Control+z");
+  assert.equal((await order()).length, 5);
+
+  step("non-PDF is rejected with a message");
   await page.setInputFiles("#file-input", files.notes);
   await page.waitForFunction(() => /not a PDF/.test(document.querySelector(".toast.error:last-child")?.textContent));
   assert.equal((await order()).length, 5, "nothing added");
@@ -379,6 +428,18 @@ try {
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - innerWidth);
   assert.ok(overflow <= 0, `page is ${overflow}px wider than the screen`);
   await page.screenshot({ path: join(DOCS, "screenshot-phone.png") });
+  // With a password set, the options open and stay open while the on-screen keyboard shrinks the window.
+  await page.click("#download-options");
+  await page.check("#protect");
+  await page.fill("#protect-password", "s3cret");
+  await page.keyboard.press("Escape");
+  await page.click("#download-options");
+  await page.setViewportSize({ width: 375, height: 420 });
+  await page.waitForTimeout(200);
+  assert.equal(await page.isVisible("#download-panel"), true, "options stay open when the keyboard appears");
+  await page.uncheck("#protect");
+  await page.keyboard.press("Escape");
+  assert.equal(await page.isHidden("#download-panel"), true);
   await page.setViewportSize({ width: 1280, height: 860 });
 
   step("offline: reload from the cache, open, render and save");

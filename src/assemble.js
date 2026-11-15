@@ -23,10 +23,15 @@ import {
 } from "../vendor/pdf-lib/pdf-lib.esm.min.js";
 import { categoryOf, colorOf, placeholders, toPdfRect } from "./annotations.js";
 import { rewritePage } from "./content.js";
+import { loadEncrypted } from "./decrypt.js";
+import { encryptDocument } from "./encrypt.js";
 
 export const PRODUCER = "PDF Studio (pdf-lib)";
 
-/** An error the user can act on; `code` is "encrypted" or "invalid". */
+/**
+ * An error the user can act on; `code` is "password" (the file needs a password, or the given
+ * one is wrong: see `wrong`), "encrypted" (protection that cannot be removed) or "invalid".
+ */
 export class SourceError extends Error {
   constructor(code, message) {
     super(message);
@@ -36,18 +41,19 @@ export class SourceError extends Error {
 
 /**
  * Parses an uploaded file. Returns the pdf-lib document and the size and own rotation of every
- * page; throws a SourceError for encrypted or unreadable files.
+ * page; throws a SourceError for protected or unreadable files. A protected file is decrypted
+ * with `password` (files that only restrict permissions open without one).
  */
-export async function loadSource(bytes) {
+export async function loadSource(bytes, { password } = {}) {
   let doc;
   try {
     doc = await PDFDocument.load(bytes, { updateMetadata: false });
   } catch (error) {
     // The minified build breaks `instanceof EncryptedPDFError`, so match the message as well.
-    if (error instanceof EncryptedPDFError || /is encrypted/.test(error?.message)) {
-      throw new SourceError("encrypted", "The file is encrypted (password or permission protection).");
+    if (!(error instanceof EncryptedPDFError || /is encrypted/.test(error?.message))) {
+      throw new SourceError("invalid", `The file could not be read as a PDF (${error.message}).`);
     }
-    throw new SourceError("invalid", `The file could not be read as a PDF (${error.message}).`);
+    doc = await openEncrypted(bytes, password);
   }
   const pages = doc.getPages().map((page) => {
     const { width, height } = page.getSize();
@@ -59,15 +65,28 @@ export async function loadSource(bytes) {
   return { doc, pages };
 }
 
+async function openEncrypted(bytes, password) {
+  try {
+    return await loadEncrypted(bytes, password ?? "");
+  } catch (error) {
+    if (error.code === "password") {
+      throw Object.assign(new SourceError("password", error.message), { wrong: Boolean(password) });
+    }
+    if (error.code === "encrypted") throw new SourceError("encrypted", error.message);
+    throw new SourceError("invalid", `The protected file could not be read (${error.message}).`);
+  }
+}
+
 /**
  * Builds the result: `pages` is a list of { sourceId, index, rotation, marks } in output order,
  * where `rotation` is added clockwise to the page's own rotation and `marks` (optional) are the
  * highlights and privacy marks, written as PDF annotations, `removed` (optional) the ids of
  * objects to delete from the page and `edits` (optional) new text for text runs, { id: text }
  * (see content.js); `sources` maps sourceId to the doc
- * returned by loadSource(). Returns the bytes of the new PDF.
+ * returned by loadSource(). With `options.password` the result is encrypted with it. Returns the
+ * bytes of the new PDF.
  */
-export async function assemble(sources, pages) {
+export async function assemble(sources, pages, options = {}) {
   if (pages.length === 0) throw new Error("Nothing to save: no pages left.");
   const out = await PDFDocument.create();
 
@@ -106,7 +125,9 @@ export async function assemble(sources, pages) {
 
   copyMetadata(sources.get(pages[0].sourceId), out);
   collectGarbage(out);
-  return out.save();
+  if (!options.password) return out.save();
+  encryptDocument(out, options.password);
+  return out.save({ useObjectStreams: false });
 }
 
 const PRIVATE_COLOR = [0.96, 0.3, 0.45];

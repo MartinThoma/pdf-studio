@@ -1,13 +1,14 @@
 // Promise-based calls into pdf-worker.js.
 //
-//   add    { sourceId, bytes }   → { pages: [{ width, height, rotation }] }
+//   add    { sourceId, bytes, password? } → { pages: [{ width, height, rotation }] }
 //   export { pages }             → { bytes }   (pages: [{ sourceId, index, rotation }])
 //   objects { sourceId, index }           → { objects }  (what can be deleted, see content.js)
 //   preview { sourceId, index, removed, edits } → { bytes }  (that page alone, objects deleted or changed)
 //   inspect { sourceId, index, id } or { sourceId, index, mark, placeholder } → { source }  (PDF source, for developers)
 //   reset  {}                    → {}
 //
-// A failed call rejects with an Error that carries the worker's `code` ("encrypted", "invalid").
+// A failed call rejects with an Error that carries the worker's `code` ("password", "encrypted",
+// "invalid"; for "password" also `wrong`: a password was given, but not the right one).
 
 export class PdfWorker {
   constructor() {
@@ -21,7 +22,7 @@ export class PdfWorker {
       if (data.ok) {
         call.resolve(data.result);
       } else {
-        call.reject(Object.assign(new Error(data.error.message), { code: data.error.code }));
+        call.reject(Object.assign(new Error(data.error.message), { code: data.error.code, wrong: data.error.wrong }));
       }
     });
     this.worker.addEventListener("error", (event) => {

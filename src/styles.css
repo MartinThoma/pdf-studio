@@ -142,6 +142,18 @@ kbd {
 .actions { display: flex; align-items: center; gap: 6px; margin-left: auto; }
 .divider { width: 1px; height: 24px; margin: 0 4px; background: var(--border); }
 
+/* Download with its options: one split button */
+.split { display: inline-flex; }
+.split #download { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.split .caret { width: 30px; padding: 0; border-top-left-radius: 0; border-bottom-left-radius: 0; border-left-color: color-mix(in srgb, var(--accent-ink) 35%, transparent); }
+.split .caret .label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.split .caret svg { transition: transform 150ms; }
+.split .caret[aria-expanded="true"] svg { transform: rotate(180deg); }
+.menu.download-panel { width: min(290px, calc(100vw - 16px)); gap: 8px; padding: 12px; font-size: 14px; }
+.download-panel .field + .option { margin-top: 4px; padding-top: 10px; border-top: 1px solid var(--border); }
+.protect-fields { display: grid; gap: 8px; padding-left: 24px; }
+.protect-fields p { margin: 0; color: var(--muted); font-size: 12.5px; line-height: 1.4; }
+
 .summary { color: var(--muted); font-size: 14px; }
 .summary strong { color: var(--text); font-weight: 600; }
 
@@ -447,15 +459,32 @@ dialog b { font-weight: 650; }
 .offline-status[data-state="pending"] svg { animation: pulse 900ms ease-in-out infinite alternate; }
 .offline-status[data-state="unavailable"] { background: var(--danger-soft); color: var(--danger); }
 .offline-status[data-state="unavailable"] svg { display: none; }
-.dialog-actions { display: flex; justify-content: flex-end; margin-top: 20px; }
+.dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
+
+/* Form controls: download options and the password dialog */
+.field { display: grid; gap: 5px; font-size: 13px; font-weight: 500; color: var(--muted); }
+dialog .field { margin-top: 14px; }
+.text-input {
+  width: 100%; height: 36px; padding: 0 10px; border: 1px solid var(--border); border-radius: 8px;
+  background: var(--surface); color: var(--text); font: 16px var(--font); /* 16px: phones don't zoom in */
+}
+.text-input[aria-invalid="true"] { border-color: var(--danger); }
+.option { display: flex; align-items: center; gap: 8px; font-size: 14px; cursor: pointer; }
+dialog .option { margin-top: 10px; }
+.option input[type="checkbox"] { width: 16px; height: 16px; margin: 0; accent-color: var(--accent); }
+dialog p.field-error { margin-top: 6px; color: var(--danger); font-size: 13px; }
+#password-dialog { width: min(400px, calc(100vw - 32px)); }
+
 dialog .hint { margin: 18px 0 0; padding-top: 14px; border-top: 1px solid var(--border); color: var(--muted); font-size: 13px; }
 
 /* Small screens */
 
 @media (max-width: 720px) {
   .actions .button:not(.primary) .label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
-  .actions .button { width: 40px; padding: 0; }
+  .actions { gap: 4px; }
+  .actions .button { width: 36px; padding: 0; }
   .actions .button.primary { width: auto; padding: 0 12px; }
+  .actions .split .caret { width: 28px; padding: 0; }
   .brand span { display: none; }
   #help { display: none; } /* keyboard shortcuts: hardly useful on a phone, and the bar is full */
   .divider { display: none; }

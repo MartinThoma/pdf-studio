@@ -24,6 +24,11 @@ const ui = {
   add: $("add"),
   choose: $("choose"),
   download: $("download"),
+  downloadOptions: $("download-options"),
+  downloadPanel: $("download-panel"),
+  protect: $("protect"),
+  password: $("protect-password"),
+  fileName: $("file-name"),
   help: $("help"),
   shortcuts: $("shortcuts"),
   fileInput: $("file-input"),
@@ -406,6 +411,11 @@ function updateBars() {
   ui.undo.disabled = !state.history.canUndo;
   ui.redo.disabled = !state.history.canRedo;
   ui.download.disabled = list.length === 0;
+  ui.downloadOptions.disabled = list.length === 0;
+  if (list.length === 0) {
+    closeDownloadPanel();
+    ui.fileName.value = ""; // a new set of files gets its own default name
+  }
   const selected = state.selection.size;
   const inGridView = state.view === "arrange";
   ui.selectionActions.hidden = selected === 0 || !inGridView;
@@ -844,9 +854,8 @@ async function addFiles(files) {
       const bytes = new Uint8Array(await file.arrayBuffer());
       if (!looksLikePdf(bytes)) throw Object.assign(new Error("not a PDF"), { code: "not-pdf" });
       const sourceId = `s${state.nextSource++}`;
-      const copy = bytes.slice();
-      const { pages: info } = await worker.call("add", { sourceId, bytes: copy }, [copy.buffer]);
-      const pdf = openPreviewDocument(bytes);
+      const { info, password } = await addToWorker(sourceId, bytes, file.name);
+      const pdf = openPreviewDocument(bytes, password);
       pdf.catch(() => {}); // a preview failure shows "No preview" on the card
       state.sources.set(sourceId, {
         name: file.name,
@@ -859,7 +868,7 @@ async function addFiles(files) {
       addedPages += added.length;
       addedNames.push(file.name);
     } catch (error) {
-      toast(fileError(file.name, error), { error: true, duration: 9000 });
+      if (error.code !== "skipped") toast(fileError(file.name, error), { error: true, duration: 9000 });
     }
   }
   if (addedNames.length > 0) {
@@ -868,6 +877,70 @@ async function addFiles(files) {
   }
 }
 
+/**
+ * Parses the file in the worker. A protected file asks for its password until it is right or
+ * the user skips the file (then it throws an error with code "skipped").
+ */
+async function addToWorker(sourceId, bytes, name) {
+  let password;
+  for (;;) {
+    const copy = bytes.slice();
+    try {
+      const { pages: info } = await worker.call("add", { sourceId, bytes: copy, password }, [copy.buffer]);
+      return { info, password };
+    } catch (error) {
+      if (error.code !== "password") throw error;
+      password = await askPassword(name, error.wrong);
+      if (password === null) throw Object.assign(new Error("skipped"), { code: "skipped" });
+    }
+  }
+}
+
+const passwordDialog = $("password-dialog");
+const openPassword = $("open-password");
+
+let passwordQueue = Promise.resolve();
+
+/** Asks for the password of file `name`; resolves to it, or to null when the file is skipped. */
+function askPassword(name, wrong) {
+  // Files dropped while the dialog is open wait for their turn.
+  const answer = passwordQueue.then(() => promptPassword(name, wrong));
+  passwordQueue = answer.catch(() => {});
+  return answer;
+}
+
+function promptPassword(name, wrong) {
+  $("password-file").textContent = `“${name}” is protected. Enter its password to open it.`;
+  $("password-wrong").hidden = !wrong;
+  if (wrong) openPassword.setAttribute("aria-invalid", "true");
+  else openPassword.removeAttribute("aria-invalid");
+  if (wrong) openPassword.select();
+  else openPassword.value = "";
+  passwordDialog.returnValue = "";
+  passwordDialog.showModal();
+  openPassword.focus();
+  return new Promise((resolve) => {
+    passwordDialog.addEventListener("close", () => {
+      resolve(passwordDialog.returnValue === "open" ? openPassword.value : null);
+    }, { once: true });
+  });
+}
+
+$("password-form").addEventListener("submit", (event) => {
+  // The only submit button is "Open"; Enter in the field submits too.
+  event.preventDefault();
+  if (!openPassword.value) return;
+  passwordDialog.close("open");
+});
+$("password-skip").addEventListener("click", () => passwordDialog.close("skip"));
+$("open-password-show").addEventListener("change", (event) => {
+  openPassword.type = event.target.checked ? "text" : "password";
+});
+openPassword.addEventListener("input", () => {
+  openPassword.removeAttribute("aria-invalid");
+  $("password-wrong").hidden = true;
+});
+
 function looksLikePdf(bytes) {
   const head = new TextDecoder("latin1").decode(bytes.subarray(0, 1024));
   return head.includes("%PDF-");
@@ -875,9 +948,7 @@ function looksLikePdf(bytes) {
 
 function fileError(name, error) {
   if (error.code === "not-pdf") return `“${name}” is not a PDF file.`;
-  if (error.code === "encrypted") {
-    return `“${name}” is protected with a password or permissions. Remove the protection, then add it again.`;
-  }
+  if (error.code === "encrypted") return `“${name}” could not be opened. ${error.message}`;
   return `“${name}” could not be opened. It may be damaged.`;
 }
 
@@ -927,9 +998,87 @@ if ("launchQueue" in window) {
 
 let saving = false;
 
+// Download options, under the arrow next to Download. They are applied to every download until
+// changed and kept in memory only (never stored).
+
+function openDownloadPanel() {
+  ui.fileName.placeholder = outputName(pages());
+  ui.downloadPanel.hidden = false;
+  ui.downloadOptions.setAttribute("aria-expanded", "true");
+  placeDownloadPanel();
+  // Not the password field: on a phone that would pop up the keyboard just to look at the options.
+  ui.protect.focus();
+}
+
+function placeDownloadPanel() {
+  const anchor = ui.downloadOptions.getBoundingClientRect();
+  const { width } = ui.downloadPanel.getBoundingClientRect();
+  ui.downloadPanel.style.left = `${Math.max(8, Math.min(anchor.right - width, innerWidth - width - 8))}px`;
+  ui.downloadPanel.style.top = `${anchor.bottom + 6}px`;
+}
+
+function closeDownloadPanel({ focus = false } = {}) {
+  if (ui.downloadPanel.hidden) return;
+  ui.downloadPanel.hidden = true;
+  ui.downloadOptions.setAttribute("aria-expanded", "false");
+  if (focus) ui.downloadOptions.focus();
+}
+
+/** The password to apply, "" for none, or null when protection is on but no password is typed. */
+function downloadPassword() {
+  if (!ui.protect.checked) return "";
+  return ui.password.value || null;
+}
+
+function showProtection() {
+  const on = Boolean(downloadPassword());
+  ui.download.querySelector("use").setAttribute("href", on ? "#i-lock" : "#i-download");
+  ui.download.title = on ? "Download the edited PDF, protected with the password (Ctrl+S)" : "Download the edited PDF (Ctrl+S)";
+  ui.downloadOptions.title = on ? "Download options: password protection is on" : "Download options";
+}
+
+ui.downloadOptions.addEventListener("click", () => {
+  if (ui.downloadPanel.hidden) openDownloadPanel();
+  else closeDownloadPanel();
+});
+ui.protect.addEventListener("change", () => {
+  $("protect-fields").hidden = !ui.protect.checked;
+  ui.password.removeAttribute("aria-invalid");
+  if (ui.protect.checked) ui.password.focus();
+  showProtection();
+});
+ui.password.addEventListener("input", () => {
+  ui.password.removeAttribute("aria-invalid");
+  showProtection();
+});
+$("protect-show").addEventListener("change", (event) => {
+  ui.password.type = event.target.checked ? "text" : "password";
+});
+ui.downloadPanel.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" || (event.key === "Enter" && event.target.matches(".text-input"))) {
+    event.preventDefault();
+    event.stopPropagation();
+    closeDownloadPanel({ focus: true });
+  }
+});
+document.addEventListener("pointerdown", (event) => {
+  if (!ui.downloadPanel.contains(event.target) && !ui.downloadOptions.contains(event.target)) closeDownloadPanel();
+});
+// The on-screen keyboard of a phone resizes the window: move the panel along, don't close it.
+addEventListener("resize", () => !ui.downloadPanel.hidden && placeDownloadPanel());
+
 async function download() {
   const list = pages();
   if (list.length === 0 || saving) return;
+  const password = downloadPassword();
+  if (password === null) {
+    openDownloadPanel();
+    ui.password.setAttribute("aria-invalid", "true");
+    ui.password.focus();
+    toast("Type a password, or turn off password protection.", { error: true });
+    return;
+  }
+  closeDownloadPanel();
   saving = true;
   ui.download.classList.add("busy");
   const label = ui.download.querySelector(".label");
@@ -937,8 +1086,9 @@ async function download() {
   try {
     const { bytes } = await worker.call("export", {
       pages: list.map(({ sourceId, index, rotation, marks, removed, edits }) => ({ sourceId, index, rotation, marks, removed, edits })),
+      password: password || undefined,
     });
-    const name = outputName(list);
+    const name = fileName(ui.fileName.value) || outputName(list);
     const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
     const link = document.createElement("a");
     link.href = url;
@@ -949,7 +1099,7 @@ async function download() {
     setTimeout(() => URL.revokeObjectURL(url), 60_000);
     state.dirty = false;
     updateBars();
-    toast(`Saved “${name}” (${plural(list.length, "page")}, ${formatSize(bytes.byteLength)}).`);
+    toast(`Saved “${name}” (${plural(list.length, "page")}, ${formatSize(bytes.byteLength)}${password ? ", password-protected" : ""}).`);
   } catch (error) {
     toast(`Saving failed: ${error.message}`, { error: true, duration: 9000 });
   } finally {
@@ -959,11 +1109,19 @@ async function download() {
   }
 }
 
+/** The file name typed in the download options, made safe; "" when none is typed. */
+function fileName(typed) {
+  const name = typed.trim().replace(/[\\/:*?"<>|\u0000-\u001f]+/g, "-").replace(/^\.+/, "");
+  if (!name) return "";
+  return /\.pdf$/i.test(name) ? name : `${name}.pdf`;
+}
+
 /** Named after the first uploaded file that still has pages in the result. */
 function outputName(list) {
   const inResult = new Set(list.map((page) => page.sourceId));
   const used = [...state.sources.keys()].filter((id) => inResult.has(id));
-  const base = state.sources.get(used[0]).name.replace(/\.pdf$/i, "");
+  // "-edited" or "-merged" from an earlier download is not added a second time.
+  const base = state.sources.get(used[0]).name.replace(/\.pdf$/i, "").replace(/-(edited|merged)$/, "");
   return used.length === 1 ? `${base}-edited.pdf` : `${base}-merged.pdf`;
 }
 

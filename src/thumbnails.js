@@ -11,10 +11,14 @@ GlobalWorkerOptions.workerSrc = `${PDFJS}pdf.worker.min.mjs`;
 const PREVIEW_SIZE = 520;
 const CONCURRENCY = 2;
 
-/** Opens a PDF for previews. Takes its own copy of `bytes` (pdf.js hands the buffer to its worker). */
-export function openPreviewDocument(bytes) {
+/**
+ * Opens a PDF for previews, with `password` if it is protected. Takes its own copy of `bytes`
+ * (pdf.js hands the buffer to its worker).
+ */
+export function openPreviewDocument(bytes, password) {
   return getDocument({
     data: bytes.slice(),
+    password,
     cMapUrl: `${PDFJS}cmaps/`,
     cMapPacked: true,
     standardFontDataUrl: `${PDFJS}standard_fonts/`,

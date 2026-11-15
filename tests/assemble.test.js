@@ -18,8 +18,9 @@ test("loadSource reports size and own rotation of each page", async () => {
   ]);
 });
 
-test("loadSource rejects encrypted and broken files with a code", async () => {
-  await assert.rejects(loadSource(makeEncryptedPdf()), { code: "encrypted" });
+test("loadSource rejects protected files without the password, and broken files, with a code", async () => {
+  await assert.rejects(loadSource(makeEncryptedPdf()), { code: "password", wrong: false });
+  await assert.rejects(loadSource(makeEncryptedPdf(), { password: "guess" }), { code: "password", wrong: true });
   await assert.rejects(loadSource(new TextEncoder().encode("not a pdf")), { code: "invalid" });
 });
 

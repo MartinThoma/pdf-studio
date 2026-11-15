@@ -20,7 +20,10 @@ After the first visit it works offline, and it can be installed as an app.
 - **Page operations in the Details view** are in the strip on the left: drag a page to move it,
   hover for the bin, right-click to rotate or delete. Type a page number to jump there.
 - **Undo and redo** for every change.
-- **Download** the result as a new PDF.
+- **Download** the result as a new PDF. The arrow next to the button sets the file name and can
+  protect the download with a password (AES-256).
+- **Password-protected PDFs** open after you enter the password; files that only restrict
+  permissions open right away.
 - **Keyboard**: arrows to move around, <kbd>Ctrl</kbd>+arrows to move pages, <kbd>R</kbd> to
   rotate, <kbd>Del</kbd> to delete, <kbd>Ctrl</kbd>+<kbd>Z</kbd> to undo, <kbd>?</kbd> for all
   shortcuts.
@@ -136,8 +139,8 @@ libraries in `vendor/`, are committed, so no build step is needed.
 
 ## Limitations
 
-- **Encrypted PDFs** (a password, or permission restrictions only) are rejected with a message.
-  Remove the protection first.
+- **Certificate-protected PDFs** (public-key security) cannot be opened. Password protection
+  and permission restrictions are removed when the file is opened.
 - **Not carried over:** bookmarks (outline), links between pages, and the form structure. Form
   fields still look the same but can no longer be filled in. Title, author, subject and keywords
   come from the first page's file.
@@ -148,7 +151,7 @@ libraries in `vendor/`, are committed, so no build step is needed.
 | Command | What it does |
 |---|---|
 | `make run` | Local server, also reachable from the local network; prints the URLs and rewrites `asset-manifest.js` when files change (`npm start`: this computer only) |
-| `npm test` | Unit tests (page operations, PDF assembly, offline file list) |
+| `npm test` | Unit tests (page operations, PDF assembly, encryption, offline file list); the encryption tests use `qpdf` when it is installed |
 | `npm run test:browser` | End-to-end test in headless Chrome, including offline; updates the screenshots in `docs/` |
 | `npm run vendor` | Copies pdf.js and pdf-lib from `node_modules/` to `vendor/` (after updating them) |
 | `npm run manifest` | Rewrites `asset-manifest.js` (the files the service worker caches) |
@@ -167,6 +170,8 @@ Chrome is somewhere else, set `CHROME=/path/to/chrome`; set `HEADED=1` to watch 
 | `src/thumbnails.js` | Previews with pdf.js, rendered lazily and kept as small JPEGs |
 | `src/pdf-worker.js`, `src/worker-client.js` | Web worker that parses uploads and builds the result |
 | `src/assemble.js` | Builds the result with pdf-lib: copy, rotate, strip cross-page references, drop unused objects |
+| `src/decrypt.js`, `src/encrypt.js` | Opening password-protected PDFs (RC4, AES-128, AES-256); password protection for the download (AES-256) |
+| `src/crypto.js` | SHA-2, AES, MD5 and RC4 in plain JavaScript (Web Crypto is missing on plain `http://`) |
 | `sw.js`, `asset-manifest.js` | Service worker: caches all files on install, serves them offline |
 | `vendor/` | pdf.js and pdf-lib, copied by `npm run vendor` (versions in `vendor/VERSIONS.md`) |
 
