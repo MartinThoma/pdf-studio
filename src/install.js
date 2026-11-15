@@ -33,6 +33,7 @@ const STEPS = {
 
 const STATUS_TEXT = {
   checking: "Looking for the latest version…",
+  updating: "Downloading the new version… PDF Studio reloads when it is ready.",
   latest: "You have the latest version.",
   unknown: "Can't reach the server to look for a newer version (offline?).",
 };
@@ -50,8 +51,9 @@ export function setupInstall({ button, dialog, toast, updates }) {
   const installNow = dialog.querySelector("[data-install-now]");
   const update = () => {
     // Installed, the button stays as the place to see the version and to update.
-    const outdated = updates.status().result === "outdated";
-    label.textContent = outdated ? "Update" : installed() ? "Version" : "Install";
+    const { result, updating } = updates.status();
+    const outdated = result === "outdated";
+    label.textContent = updating ? "Updating…" : outdated ? "Update" : installed() ? "Version" : "Install";
     button.dataset.update = String(outdated);
     button.title = outdated
       ? "A newer version of PDF Studio is available"
@@ -66,14 +68,20 @@ export function setupInstall({ button, dialog, toast, updates }) {
     update();
     dialog.querySelector("[data-version-current]").textContent = describeVersion(status.current);
     const line = dialog.querySelector("[data-version-status]");
-    line.dataset.state = status.result;
-    line.querySelector("span").textContent =
-      status.result === "outdated"
+    line.dataset.state = status.updating ? "checking" : status.result;
+    line.querySelector("span").textContent = status.updating
+      ? STATUS_TEXT.updating
+      : status.result === "outdated"
         ? status.latest
           ? `A newer version is available: ${describeVersion(status.latest)}.`
           : "A newer version is ready."
         : STATUS_TEXT[status.result];
-    dialog.querySelector("[data-update-now]").hidden = status.result !== "outdated";
+    const updateNow = dialog.querySelector("[data-update-now]");
+    updateNow.hidden = status.result !== "outdated";
+    updateNow.disabled = Boolean(status.updating);
+    updateNow.classList.toggle("busy", Boolean(status.updating));
+    updateNow.textContent = status.updating ? "Updating…" : "Update now";
+    dialog.querySelector("[data-check-again]").disabled = Boolean(status.updating);
   }
 
   addEventListener("beforeinstallprompt", (event) => {

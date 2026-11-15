@@ -4,14 +4,16 @@
 // The service worker (sw.js) serves the app from a cache, so a new version on the server only
 // arrives through a new service worker. This module
 //   - looks for one on every start, when the window comes back to the front and once an hour,
-//     never through the browser's HTTP cache;
+//     never through the browser's HTTP cache or a CDN's cache (the URL has a fresh query string);
+//   - installs the latest version by registering sw.js?v=<its build>: a new script URL always
+//     installs a new service worker, which then fetches the files of exactly that build (sw.js);
 //   - switches to it right away while no work is open, and otherwise tells the user and waits;
-//   - answers "what runs here, what is the latest?" for the version dialog;
-//   - can always get the latest version on request, as a last resort by dropping every cache.
+//   - answers "what runs here, what is the latest?" for the version dialog.
 
 import { VERSION } from "./version.js";
 
 const MANIFEST_URL = new URL("../asset-manifest.js", import.meta.url).href;
+const WORKER_URL = new URL("../sw.js", import.meta.url).href;
 const CHECK_EVERY = 60 * 60 * 1000;
 const CHECK_ON_RETURN_AFTER = 10 * 60 * 1000;
 
@@ -38,7 +40,7 @@ export const describeVersion = ({ app, build }) => (build ? `${app} (build ${bui
  */
 export function setupUpdates({ isBusy, confirmLoss, onChange = () => {}, toast }) {
   const supported = "serviceWorker" in navigator && location.protocol !== "file:";
-  const state = { current: { app: VERSION, build: "" }, latest: null, checked: false, waiting: false };
+  const state = { current: { app: VERSION, build: "" }, latest: null, checked: false, waiting: false, updating: false };
   let registration = null;
   let reloading = false;
   let lastCheck = 0;
@@ -50,6 +52,7 @@ export function setupUpdates({ isBusy, confirmLoss, onChange = () => {}, toast }
     // A new version that is already downloaded counts as outdated even when the server can't be reached.
     result: state.waiting ? "outdated" : state.checked ? compareVersions(state.current, state.latest) : "checking",
     ready: state.waiting,
+    updating: state.updating, // apply() is downloading the new version
   });
 
   async function askWorker() {
@@ -79,14 +82,49 @@ export function setupUpdates({ isBusy, confirmLoss, onChange = () => {}, toast }
     }
   }
 
-  /** Asks the server; resolves with status(). Also makes the browser fetch a new service worker. */
+  /** Asks the server; resolves with status(). Starts installing a newer version if there is one. */
   async function check() {
     lastCheck = Date.now();
     await Promise.all([askWorker(), fetchLatest()]);
     state.checked = true;
-    if (navigator.onLine !== false) registration?.update().catch(() => {});
+    if (supported) await installLatest().catch(() => {});
     changed();
     return status();
+  }
+
+  const tracked = new WeakSet();
+  function track(installing) {
+    if (!installing || tracked.has(installing)) return;
+    tracked.add(installing);
+    installing.addEventListener("statechange", () => {
+      if (installing.state !== "installed") return;
+      if (navigator.serviceWorker.controller) offer();
+      else toast?.("PDF Studio now works offline.");
+    });
+  }
+
+  function watch(result) {
+    if (registration === result) return;
+    registration = result;
+    registration.addEventListener("updatefound", () => track(registration.installing));
+    track(registration.installing); // register() may resolve after "updatefound"
+    if (registration.waiting && navigator.serviceWorker.controller) offer();
+  }
+
+  /** Registers the service worker of the latest build, unless it already runs or is on its way. */
+  async function installLatest() {
+    const build = state.latest?.build;
+    if (!build) {
+      // Server not reachable: keep what is there; a first visit still gets offline use.
+      if (!registration) watch(await navigator.serviceWorker.register(WORKER_URL, { updateViaCache: "none" }));
+      return;
+    }
+    if (registration?.active && state.current.build === build) return;
+    const newest = registration?.installing || registration?.waiting || registration?.active;
+    if (newest && new URL(newest.scriptURL).searchParams.get("v") === build) return;
+    const url = `${WORKER_URL}?v=${encodeURIComponent(build)}`;
+    // updateViaCache "none": sw.js never comes from the HTTP cache.
+    watch(await navigator.serviceWorker.register(url, { updateViaCache: "none" }));
   }
 
   function activate(worker) {
@@ -98,6 +136,7 @@ export function setupUpdates({ isBusy, confirmLoss, onChange = () => {}, toast }
   function offer() {
     state.waiting = true;
     changed();
+    if (state.updating) return; // apply() takes it from here
     if (!isBusy() && registration?.waiting) {
       activate(registration.waiting);
       return;
@@ -108,34 +147,55 @@ export function setupUpdates({ isBusy, confirmLoss, onChange = () => {}, toast }
     });
   }
 
+  /** Waits until the new version is installed; gives up when no installation is going on. */
+  async function waitForInstall(limit = 120_000) {
+    const started = Date.now();
+    while (!registration?.waiting && Date.now() - started < limit) {
+      if (!registration?.installing && Date.now() - started > 3000) break;
+      await new Promise((resolve) => setTimeout(resolve, 200));
+    }
+    return registration?.waiting ?? null;
+  }
+
   /**
-   * Gets the latest version and reloads. Resolves false if the user chose to keep working.
-   * If the new service worker does not arrive, every cache of the app is dropped: the reload
-   * then takes all files from the server.
+   * Gets the latest version and reloads. Resolves false if the user chose to keep working or the
+   * new version could not be downloaded (then the current one keeps running, and a toast says so).
    */
   async function apply() {
+    if (state.updating) return true;
     if (isBusy() && !confirmLoss()) return false;
-    if (!supported || !registration) {
+    if (!supported) {
       location.reload();
       return true;
     }
-    if (!registration.waiting) {
-      await registration.update().catch(() => {});
-      const started = Date.now();
-      while (!registration.waiting && Date.now() - started < 20_000) {
-        if (!registration.installing && Date.now() - started > 3000) break; // the server has nothing newer
-        await new Promise((resolve) => setTimeout(resolve, 200));
+    state.updating = true;
+    changed();
+    const notice = toast?.("Downloading the new version of PDF Studio…", { duration: 120_000 });
+    try {
+      if (!registration?.waiting) await check();
+      const waiting = registration?.waiting ?? (await waitForInstall());
+      if (waiting) {
+        activate(waiting);
+        setTimeout(() => location.reload(), 8000); // in case the switch is never announced
+        return true;
       }
+      if (state.latest && state.current.build === state.latest.build) {
+        notice?.remove();
+        state.updating = false;
+        changed();
+        return true; // nothing newer after all
+      }
+      throw new Error("The new version did not arrive.");
+    } catch {
+      notice?.remove();
+      state.updating = false;
+      changed();
+      toast?.("The new version could not be downloaded. Check the connection and try again.", {
+        error: true,
+        duration: 9000,
+      });
+      return false;
     }
-    if (registration.waiting) {
-      activate(registration.waiting);
-      setTimeout(() => location.reload(), 4000); // in case the switch is never announced
-      return true;
-    }
-    for (const key of await caches.keys()) if (key.startsWith("pdf-studio-")) await caches.delete(key);
-    await registration.unregister().catch(() => {});
-    location.reload();
-    return true;
   }
 
   if (supported) {
@@ -143,22 +203,10 @@ export function setupUpdates({ isBusy, confirmLoss, onChange = () => {}, toast }
       if (reloading) location.reload();
     });
     navigator.serviceWorker
-      // updateViaCache "none": neither sw.js nor asset-manifest.js may come from the HTTP cache.
-      .register(new URL("../sw.js", import.meta.url), { updateViaCache: "none" })
-      .then((result) => {
-        registration = result;
-        if (registration.waiting && navigator.serviceWorker.controller) offer();
-        registration.addEventListener("updatefound", () => {
-          const installing = registration.installing;
-          installing?.addEventListener("statechange", () => {
-            if (installing.state !== "installed") return;
-            if (navigator.serviceWorker.controller) offer();
-            else toast?.("PDF Studio now works offline.");
-          });
-        });
-        check();
-      })
-      .catch(() => check());
+      .getRegistration(new URL("../", import.meta.url).href)
+      .then((result) => result && watch(result))
+      .catch(() => {})
+      .then(() => check());
     document.addEventListener("visibilitychange", () => {
       if (document.visibilityState === "visible" && Date.now() - lastCheck > CHECK_ON_RETURN_AFTER) check();
     });

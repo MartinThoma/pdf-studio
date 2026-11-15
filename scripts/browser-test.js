@@ -466,17 +466,50 @@ try {
   const realManifest = readFileSync(manifestPath, "utf8");
   try {
     writeFileSync(manifestPath, realManifest.replace(/"version": "[0-9a-f]+"/, '"version": "feedfeedfeed"'));
+    // Like a CDN right after a deploy: the plain URL still gives the old copy; only URLs with a
+    // query string (which the CDN has not cached) reach the new file.
+    // One file of the new version comes slowly, so the progress shows before the reload.
+    server.override = async (path, search) => {
+      if (path === "/asset-manifest.js" && !search) return realManifest;
+      if (path === "/index.html" && search === "?v=feedfeedfeed") await new Promise((resolve) => setTimeout(resolve, 1500));
+      return undefined;
+    };
     await page.click("#install");
     await page.waitForSelector('#install-dialog [data-version-status][data-state="outdated"]');
     assert.match(await page.locator("[data-version-status]").textContent(), /newer version/);
     assert.equal((await page.locator("#install .label").textContent()).trim(), "Update");
     assert.equal((await order()).length, 3, "work is open, so nothing reloads by itself");
-    await Promise.all([page.waitForEvent("load"), page.click("[data-update-now]")]);
+    const reloaded = page.waitForEvent("load", { timeout: 30_000 });
+    await page.click("[data-update-now]");
+    assert.equal((await page.textContent("[data-update-now]")).trim(), "Updating…");
+    assert.match(await page.textContent("[data-version-status]"), /Downloading the new version/);
+    assert.match(await lastToast().textContent(), /Downloading the new version/);
+    await reloaded;
     await page.waitForFunction(() => navigator.serviceWorker.controller !== null);
     await page.click("#install");
     await page.waitForSelector('#install-dialog [data-version-status][data-state="latest"]');
     assert.match(await page.locator("[data-version-current]").textContent(), /build feedfee/);
+    await page.keyboard.press("Escape");
+
+    step("a new version that cannot be downloaded: a message, the current version keeps running");
+    writeFileSync(manifestPath, realManifest.replace(/"version": "[0-9a-f]+"/, '"version": "deadbeefdead"'));
+    server.override = (path, search) => (path === "/src/app.js" && search === "?v=deadbeefdead" ? null : undefined);
+    await page.setInputFiles("#file-input", files.report); // work is open: no automatic switch
+    await page.waitForFunction(() => window.pdfStudio.pages().length === 4);
+    await page.click("#install");
+    await page.waitForSelector('#install-dialog [data-version-status][data-state="outdated"]');
+    let reloadedAgain = false;
+    page.once("load", () => (reloadedAgain = true));
+    await page.click("[data-update-now]");
+    await page.waitForSelector(".toast.error", { timeout: 30_000 });
+    assert.match(await page.locator(".toast.error").last().textContent(), /could not be downloaded/);
+    assert.equal(reloadedAgain, false, "no reload into the same old version");
+    assert.equal((await page.textContent("[data-update-now]")).trim(), "Update now");
+    assert.equal(await page.isEnabled("[data-update-now]"), true);
+    assert.match(await page.locator("[data-version-current]").textContent(), /build feedfee/);
+    assert.equal((await order()).length, 4, "the work is still there");
   } finally {
+    server.override = undefined;
     writeFileSync(manifestPath, realManifest);
   }
 

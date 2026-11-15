@@ -36,16 +36,34 @@ function isPublic(path) {
   return PUBLIC_FILES.has(path) || PUBLIC_DIRS.some((dir) => path.startsWith(dir));
 }
 
+/**
+ * Starts the server. For the browser test, `server.override(path, search)` may return (or resolve
+ * to) the text to send instead of the file, e.g. to act like a CDN that still has an old copy,
+ * or null for "404 Not found".
+ */
 export function startServer(port = 0, host = "127.0.0.1") {
-  const server = createServer((request, response) => {
+  const server = createServer(async (request, response) => {
     let path;
+    let search;
     try {
-      path = normalize(decodeURIComponent(new URL(request.url, "http://localhost").pathname));
+      const url = new URL(request.url, "http://localhost");
+      path = normalize(decodeURIComponent(url.pathname));
+      search = url.search;
     } catch {
       response.writeHead(400).end();
       return;
     }
     if (path === "/") path = "/index.html";
+    const override = await server.override?.(path, search);
+    if (override === null) {
+      response.writeHead(404, { "content-type": "text/plain" }).end("Not found");
+      return;
+    }
+    if (override !== undefined) {
+      response.writeHead(200, { "content-type": TYPES[extname(path)] ?? "application/octet-stream", "cache-control": "no-cache" });
+      response.end(override);
+      return;
+    }
     const file = join(ROOT, path);
     try {
       if (!isPublic(path) || !statSync(file).isFile()) throw new Error("not public");

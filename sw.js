@@ -5,18 +5,32 @@
 // "skip-waiting", right away when no work is open, otherwise when the user says so. It never
 // takes over a running page by itself, so a page never mixes files of two versions (pdf.js and
 // its worker must match).
+//
+// The page registers sw.js?v=<build of the latest version>, and every file is fetched with that
+// build in its URL. A CDN in front of the site (e.g. Cloudflare in front of GitHub Pages) keeps
+// plain URLs for hours after a deploy, and so may the browser's HTTP cache; a URL that has never
+// been asked for before can only come from the server itself.
 
-importScripts("./asset-manifest.js");
+const BUILD = new URL(self.location.href).searchParams.get("v");
+importScripts(BUILD ? `./asset-manifest.js?v=${encodeURIComponent(BUILD)}` : "./asset-manifest.js");
 
 const { app, version, urls } = self.ASSET_MANIFEST;
 const CACHE = `pdf-studio-${version}`;
 const INDEX = new URL("./", self.registration.scope).href;
 
 self.addEventListener("install", (event) => {
-  // "reload" goes past the browser's HTTP cache: a new version must not be built from old files
-  // that the web server allowed the browser to keep for a while.
+  // Stored under the plain URL, which is what the page asks for.
   event.waitUntil(
-    caches.open(CACHE).then((cache) => cache.addAll(urls.map((url) => new Request(url, { cache: "reload" })))),
+    (async () => {
+      const cache = await caches.open(CACHE);
+      await Promise.all(
+        urls.map(async (url) => {
+          const response = await fetch(new Request(`${url}?v=${version}`, { cache: "reload" }));
+          if (!response.ok) throw new Error(`${url}: HTTP ${response.status}`);
+          await cache.put(url, response);
+        }),
+      );
+    })(),
   );
 });
 
