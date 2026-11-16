@@ -105,17 +105,3 @@ Today they still look the same but are no longer fields.
 
 Open PDFs protected with public-key security (certificates). Low priority: needs the user's
 private key in the browser.
-
-## Design consistency
-
-See [DESIGN.md](DESIGN.md).
-
-### R-TOKENIZE_HARDCODED_COLORS
-
-A few styles in [src/styles.css](src/styles.css) hardcode colours instead of using the tokens, so
-they don't follow dark mode: the selection frame (`.pick`, `.draft.select`, and the `.draft`
-background use light-mode `#2847c4`), and the mark delete dot (`.mark-delete`, `#d92b2b` instead
-of `--danger`). The privacy and highlight colours (`#f03c64`, `#d92b57`, `#e8b800`) are repeated
-in several rules and could become custom properties too.
-
-Done when: these rules use custom properties, and the selection frame looks right in dark mode.

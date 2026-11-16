@@ -14,13 +14,24 @@ colors:
   accent-ink: "#ffffff"
   danger: "#b4302a"
   danger-soft: "#f8e4e2"
-  paper: "#ffffff"
+  danger-ink: "#ffffff"
   private: "#f03c64"
-  private-tool: "#d92b57"
-  highlight-badge: "#e8b800"
-  update-dot: "#e0780a"
-  toast: "#1e1e1c"
-  toast-text: "#f2f1ec"
+  private-strong: "#d92b57"
+  private-ink: "#ffffff"
+  highlight: "#e8b800"
+  highlight-ink: "#2b2300"
+  removed: "#55524a"
+  update: "#e0780a"
+  warning-soft: "#fdecc8"
+  warning-ink: "#7a4b00"
+  toast-bg: "#1e1e1c"
+  toast-ink: "#f2f1ec"
+  paper: "#ffffff"
+  paper-skeleton: "#e9e8e3"
+  paper-muted: "#8a8982"
+  paper-accent: "#2847c4"
+  paper-danger: "#b4302a"
+  paper-private-edge: "rgb(200 20 70 / 0.8)"
   bg-dark: "#181816"
   surface-dark: "#242422"
   surface-2-dark: "#2e2d2a"
@@ -33,6 +44,11 @@ colors:
   accent-ink-dark: "#10142a"
   danger-dark: "#f08b82"
   danger-soft-dark: "#4a2522"
+  danger-ink-dark: "#2b0f0c"
+  warning-soft-dark: "#4a3a14"
+  warning-ink-dark: "#ffd98a"
+  toast-bg-dark: "#f2f1ec"
+  toast-ink-dark: "#1e1e1c"
 typography:
   display:
     fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, Helvetica Neue, Arial, sans-serif"
@@ -61,9 +77,20 @@ typography:
     fontSize: "14px"
     fontWeight: 500
     lineHeight: 1
+  label-small:
+    fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, Helvetica Neue, Arial, sans-serif"
+    fontSize: "13px"
+    fontWeight: 500
+    lineHeight: 1
   caption:
     fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, Helvetica Neue, Arial, sans-serif"
     fontSize: "12px"
+    fontWeight: 650
+    lineHeight: 1.4
+    fontFeature: "tnum"
+  badge:
+    fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, Helvetica Neue, Arial, sans-serif"
+    fontSize: "11px"
     fontWeight: 650
     lineHeight: 1.4
     fontFeature: "tnum"
@@ -73,11 +100,15 @@ typography:
     fontWeight: 400
     lineHeight: 1.45
 rounded:
+  hairline: "1px"
   paper: "2px"
+  key: "5px"
   sm: "6px"
+  inner: "7px"
   md: "8px"
   lg: "10px"
   xl: "14px"
+  overlay: "16px"
   dropzone: "18px"
   pill: "999px"
 spacing:
@@ -121,7 +152,7 @@ components:
   button-danger-hover:
     backgroundColor: "{colors.danger-soft}"
   button-small:
-    typography: "{typography.label}"
+    typography: "{typography.label-small}"
     rounded: "{rounded.md}"
     padding: "0 10px"
     height: "32px"
@@ -155,13 +186,13 @@ components:
     rounded: "{rounded.lg}"
     padding: "5px"
   toast:
-    backgroundColor: "{colors.toast}"
-    textColor: "{colors.toast-text}"
+    backgroundColor: "{colors.toast-bg}"
+    textColor: "{colors.toast-ink}"
     rounded: "{rounded.lg}"
     padding: "10px 10px 10px 16px"
   toast-error:
     backgroundColor: "{colors.danger}"
-    textColor: "#ffffff"
+    textColor: "{colors.danger-ink}"
   dialog:
     backgroundColor: "{colors.surface}"
     textColor: "{colors.text}"
@@ -219,21 +250,36 @@ signal colours that each mean one thing.
 - **Ink** (`text`): all primary text. **Pencil** (`muted`): secondary text, captions, field
   labels, hints, the file name under a page.
 - **Rule Line** (`border`): every 1px border and divider.
-- **Paper** (`paper`): the PDF page itself, in both modes.
+- **Toast Ink / Toast Paper** (`toast-bg`, `toast-ink`): toasts are dark on the light desk and
+  light on the dark desk.
+
+### On paper
+The PDF page is white in both modes, so everything drawn on it has its own tokens that do not
+change in dark mode.
+- **Paper** (`paper`): the page in the grid, strip, stage and drag ghost.
+- **Paper Skeleton / Paper Pencil** (`paper-skeleton`, `paper-muted`): the placeholder lines
+  while a preview loads, and "No preview".
+- **Ballpoint on Paper** (`paper-accent`): the frame under the pointer, the selected objects, the
+  rectangle being dragged, the ring around the current mark. Equal to light-mode Ballpoint Blue in
+  both modes; the dark-mode periwinkle would be too faint on white.
+- **Danger on Paper** (`paper-danger`): the delete dot on a mark.
+- **Privacy Edge** (`paper-private-edge`): the thin crimson edge of a private mark.
 
 ### Signal colours (meaning only)
-- **Danger Red** (`danger`, `danger-soft`): delete actions (red text, red-wash hover), error toasts,
-  invalid inputs.
-- **Privacy Pink** (`private`, `private-tool`): private marks, their page badge and strip dot, the
-  active *Mark private* tool. On the page a private mark is a translucent pink fill with a thin
-  crimson edge.
-- **Highlighter Yellow** (`highlight-badge`): the highlight badge and strip dot. Highlights on the
-  page use the five highlight colours from `src/annotations.js` (yellow, green, blue, purple,
-  orange) at 50% opacity, multiplied onto the paper.
+- **Danger Red** (`danger`, `danger-soft`, `danger-ink`): delete actions (red text, red-wash
+  hover), error toasts, invalid inputs. In dark mode the red is light, so text on it is dark.
+- **Privacy Pink** (`private`, `private-strong`, `private-ink`): private marks (a 38% fill on the
+  page), their page badge, strip dot and list edge; the stronger crimson for the active *Mark
+  private* tool and the rectangle being dragged.
+- **Highlighter Yellow** (`highlight`, `highlight-ink`): the highlight badge and strip dot, and the
+  edge of a highlight in the mark list. Highlights on the page use the five highlight colours from
+  `src/annotations.js` (yellow, green, blue, purple, orange) at 50% opacity, multiplied onto the
+  paper.
+- **Removed Grey** (`removed`): the badge on a page with deleted objects.
 - **Source dots**: each opened file gets a colour from `SOURCE_COLORS` in `src/app.js` (blue,
   orange, green, magenta, teal, amber, rose, olive), shown as an 8px dot before the file name.
-- **Update Orange** (`update-dot`): the dot on the *Update* button. Amber tint for the "newer
-  version" status.
+- **Update Orange** (`update`): the dot on the *Update* button. **Warning Amber** (`warning-soft`,
+  `warning-ink`) for the "newer version" status.
 
 ### Named Rules
 **The One Ink Rule.** Ballpoint Blue is the only colour that means "you can act on this" or "this
@@ -244,6 +290,10 @@ thing. Never use them for decoration, illustration or emphasis.
 
 **The White Paper Rule.** The PDF page is always pure white with its paper shadow, in light and dark
 mode. Dark mode darkens the desk, never the paper.
+
+**The On-Paper Rule.** Anything drawn on top of the page uses the `paper-*` tokens, never the
+desk tokens (`accent`, `danger`, `muted`), because the desk tokens change in dark mode and the
+paper doesn't.
 
 ## Typography
 
@@ -261,9 +311,12 @@ nothing extra. Hierarchy comes from weight (400, 500, 600, 650, 700) more than f
 - **Title** (650, 16px, −0.01em): the *PDF Studio* wordmark. Panel headings ("Selected",
   "Marks on this page") are 14px.
 - **Body** (400, 15px, 1.45): base text, dialogs, toasts at 14px.
-- **Label** (500, 14px, 1): buttons; 13px on small buttons and field labels.
-- **Caption** (650, 11–13px, tabular numbers): page numbers under thumbnails, rotation and mark
-  badges, mark kinds, the selection count.
+- **Label** (500, 14px, 1): buttons, menu items, toasts.
+- **Label small** (500, 13px, 1): small buttons, field labels, hints, the selection count, page
+  captions.
+- **Caption** (650, 12px, tabular numbers): panel field labels and the strip's page numbers; at
+  400 for file names under pages and comments in the mark list.
+- **Badge** (650, 11px, tabular numbers): rotation and mark badges on thumbnails, mark kinds.
 
 ### Named Rules
 **The System Font Rule.** No web fonts. The app must work offline and under a CSP that blocks
@@ -321,8 +374,10 @@ ghost, hover tools) cast shadows. Never add a shadow to a bar, panel, card or bu
 ## Shapes
 
 Soft but not round. Controls use gently curved corners (8px); containers that hold several things
-use 10px; dialogs 14px; the dropzone 18px. Pages are almost square-cornered (2px) because they are
-paper. Counts and badges are pills. Borders are always 1px Rule Line, except the dashed 2px
+use 10px; dialogs 14px; the drop overlay card 16px; the dropzone 18px. Controls nested inside a
+floating container are a step tighter: 7px for the buttons in a toast or the page hover bar, 6px
+for menu items and side-panel inputs. Keyboard keys are 5px. Pages are almost square-cornered
+(2px) because they are paper; the frame of a selected object is 1px. Counts and badges are pills. Borders are always 1px Rule Line, except the dashed 2px
 dropzone border and the dashed accent frame that shows what a click will select.
 
 ## Components
@@ -384,7 +439,8 @@ small translucent button on the right. They slide up 10px and fade in over 220ms
 - **Do** use the CSS custom properties in `src/styles.css` (`--accent`, `--surface`, …), so dark mode
   follows automatically.
 - **Do** keep Ballpoint Blue for interaction and selection only (The One Ink Rule).
-- **Do** keep pages white with the paper shadow in both modes (The White Paper Rule).
+- **Do** keep pages white with the paper shadow in both modes (The White Paper Rule), and draw on
+  them with the `paper-*` tokens (The On-Paper Rule).
 - **Do** give buttons a visible label on desktop. Only universal icons (undo, redo, help, close)
   may be icon-only. Under 720px secondary buttons collapse to icons; every button keeps a label
   for screen readers and a `title`.
@@ -397,7 +453,7 @@ small translucent button on the right. They slide up 10px and fade in over 220ms
 - **Don't** introduce a second accent colour or use the signal colours decoratively.
 - **Don't** load web fonts, icon fonts or anything from another origin; icons are inline SVG from
   the sprite in `index.html`.
-- **Don't** hardcode colours. Existing exceptions to clean up: the selection frame (`.pick`,
-  `.draft.select`, `.draft` background) hardcodes light-mode Ballpoint Blue, and the mark delete
-  dot uses its own red instead of `--danger`.
+- **Don't** hardcode colours in rules; add a custom property in the token block at the top of
+  `src/styles.css` (with its dark value, if it sits on the desk). The one literal left is the
+  highlight fallback `rgb(255 235 64)`, which mirrors the default yellow in `src/annotations.js`.
 - **Don't** make inputs smaller than 16px text on phones.

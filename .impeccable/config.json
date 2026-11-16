@@ -1,0 +1,41 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "side-tab",
+        "value": "*",
+        "files": [
+          "src/styles.css"
+        ],
+        "createdAt": "2026-11-16T08:22:16.016Z",
+        "reason": "Claude: the 4px left edge of a mark-list row shows that mark's highlight colour or privacy pink (data, not decoration); documented in DESIGN.md Components > Mark row"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "rgb(0 0 0 / 0.08)",
+        "createdAt": "2026-11-16T08:22:16.294Z",
+        "reason": "Claude: translucent hover tint of the toast action button in dark mode; neutral overlay, not a palette colour"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "rgb(0 0 0 / 0.35)",
+        "createdAt": "2026-11-16T08:22:16.412Z",
+        "reason": "Claude: dialog backdrop scrim, documented in DESIGN.md Elevation & Depth"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "rgb(0 0 0 / 0.25)",
+        "createdAt": "2026-11-16T08:22:16.522Z",
+        "reason": "Claude: hairline border around highlight colour swatches; neutral overlay"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "rgb(255 235 64)",
+        "createdAt": "2026-11-16T08:22:16.644Z",
+        "reason": "Claude: fallback for --mark, mirrors the default yellow in src/annotations.js; documented in DESIGN.md Do's and Don'ts"
+      }
+    ]
+  }
+}

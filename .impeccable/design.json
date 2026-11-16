@@ -15,14 +15,30 @@
       "muted": { "role": "neutral", "displayName": "Pencil", "canonical": "oklch(52.7% 0.009 99)", "tonalRamp": ["#0c0b09", "#272623", "#464541", "#676661", "#8a8984", "#afaea9", "#d2d1cd", "#efeeeb"] },
       "border": { "role": "neutral", "displayName": "Rule Line", "canonical": "oklch(89.4% 0.010 93)", "tonalRamp": ["#0c0b09", "#272623", "#464540", "#686660", "#8b8983", "#afaea9", "#d2d1cc", "#f0eeea"] },
       "paper": { "role": "neutral", "displayName": "Paper" },
+      "paper-skeleton": { "role": "neutral", "displayName": "Paper Skeleton" },
+      "paper-muted": { "role": "neutral", "displayName": "Paper Pencil" },
+      "paper-accent": { "role": "primary", "displayName": "Ballpoint on Paper" },
+      "paper-danger": { "role": "secondary", "displayName": "Danger on Paper" },
+      "paper-private-edge": { "role": "tertiary", "displayName": "Privacy Edge" },
       "danger": { "role": "secondary", "displayName": "Danger Red", "canonical": "oklch(51.3% 0.170 27)", "tonalRamp": ["#1e0001", "#4e0304", "#7f1714", "#b0332d", "#d75e53", "#f68b7f", "#febfb6", "#fee9e6"] },
       "danger-soft": { "role": "secondary", "displayName": "Red Wash" },
+      "danger-ink": { "role": "secondary", "displayName": "Ink on Danger" },
       "private": { "role": "tertiary", "displayName": "Privacy Pink", "canonical": "oklch(63.7% 0.215 13)", "tonalRamp": ["#1e0005", "#4d0317", "#82062c", "#bb1344", "#e64666", "#fe8292", "#ffbdc2", "#ffe8ea"] },
-      "private-tool": { "role": "tertiary", "displayName": "Privacy Crimson" },
-      "highlight-badge": { "role": "tertiary", "displayName": "Highlighter Yellow", "canonical": "oklch(80.3% 0.164 89)", "tonalRamp": ["#100a00", "#312500", "#554205", "#7d6200", "#a88402", "#ceaa41", "#edce7b", "#ffedc0"] },
-      "update-dot": { "role": "tertiary", "displayName": "Update Orange", "canonical": "oklch(67.7% 0.162 56)", "tonalRamp": ["#170600", "#3d1d01", "#693502", "#98510a", "#ca6d12", "#ea9859", "#fec399", "#ffeadc"] },
-      "toast": { "role": "neutral", "displayName": "Toast Ink" },
-      "toast-text": { "role": "neutral", "displayName": "Toast Paper" },
+      "private-strong": { "role": "tertiary", "displayName": "Privacy Crimson" },
+      "private-ink": { "role": "tertiary", "displayName": "Ink on Privacy" },
+      "highlight": { "role": "tertiary", "displayName": "Highlighter Yellow", "canonical": "oklch(80.3% 0.164 89)", "tonalRamp": ["#100a00", "#312500", "#554205", "#7d6200", "#a88402", "#ceaa41", "#edce7b", "#ffedc0"] },
+      "highlight-ink": { "role": "tertiary", "displayName": "Ink on Highlighter" },
+      "removed": { "role": "neutral", "displayName": "Removed Grey" },
+      "update": { "role": "tertiary", "displayName": "Update Orange", "canonical": "oklch(67.7% 0.162 56)", "tonalRamp": ["#170600", "#3d1d01", "#693502", "#98510a", "#ca6d12", "#ea9859", "#fec399", "#ffeadc"] },
+      "warning-soft": { "role": "tertiary", "displayName": "Warning Amber" },
+      "warning-ink": { "role": "tertiary", "displayName": "Ink on Warning Amber" },
+      "toast-bg": { "role": "neutral", "displayName": "Toast Ink" },
+      "toast-ink": { "role": "neutral", "displayName": "Toast Paper" },
+      "danger-ink-dark": { "role": "secondary", "displayName": "Ink on Night Danger" },
+      "warning-soft-dark": { "role": "tertiary", "displayName": "Night Warning Amber" },
+      "warning-ink-dark": { "role": "tertiary", "displayName": "Ink on Night Warning Amber" },
+      "toast-bg-dark": { "role": "neutral", "displayName": "Night Toast" },
+      "toast-ink-dark": { "role": "neutral", "displayName": "Night Toast Ink" },
       "bg-dark": { "role": "neutral", "displayName": "Night Desk" },
       "surface-dark": { "role": "neutral", "displayName": "Night Card" },
       "surface-2-dark": { "role": "neutral", "displayName": "Night Pressed" },
@@ -41,8 +57,10 @@
       "headline": { "displayName": "Headline", "purpose": "Dialog titles." },
       "title": { "displayName": "Title", "purpose": "The PDF Studio wordmark." },
       "body": { "displayName": "Body", "purpose": "Base text, dialogs; toasts at 14px." },
-      "label": { "displayName": "Label", "purpose": "Buttons; 13px on small buttons and field labels." },
-      "caption": { "displayName": "Caption", "purpose": "Page numbers, rotation and mark badges, mark kinds, selection count; 11–13px, tabular figures." },
+      "label": { "displayName": "Label", "purpose": "Buttons, menu items, toasts." },
+      "label-small": { "displayName": "Label small", "purpose": "Small buttons, field labels, hints, the selection count, page captions." },
+      "caption": { "displayName": "Caption", "purpose": "Panel field labels and the strip's page numbers; at 400 for file names under pages and mark-list comments." },
+      "badge": { "displayName": "Badge", "purpose": "Rotation and mark badges on thumbnails, mark kinds; tabular figures." },
       "mono": { "displayName": "Mono", "purpose": "PDF source in the developer options only." }
     },
     "shadows": [
@@ -138,7 +156,7 @@
       "refersTo": "toast",
       "description": "Bottom-centre message with an optional Undo action.",
       "html": "<div class=\"ds-toast\"><span>Deleted 1 page.</span><button>Undo</button></div>",
-      "css": ".ds-toast { display: flex; align-items: center; gap: 12px; width: min(480px, 100%); padding: 10px 10px 10px 16px; border-radius: 10px; background: #1e1e1c; color: #f2f1ec; box-shadow: 0 8px 28px rgb(0 0 0 / 0.25); font: 14px system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; } .ds-toast span { flex: 1; } .ds-toast button { height: 32px; padding: 0 12px; border: 0; border-radius: 7px; background: rgb(255 255 255 / 0.14); color: inherit; font: 600 13px/1 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; cursor: pointer; } .ds-toast button:hover { background: rgb(255 255 255 / 0.24); }"
+      "css": ".ds-toast { display: flex; align-items: center; gap: 12px; width: min(480px, 100%); padding: 10px 10px 10px 16px; border-radius: 10px; background: var(--toast-bg, #1e1e1c); color: var(--toast-ink, #f2f1ec); box-shadow: 0 8px 28px rgb(0 0 0 / 0.25); font: 14px system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; } .ds-toast span { flex: 1; } .ds-toast button { height: 32px; padding: 0 12px; border: 0; border-radius: 7px; background: rgb(255 255 255 / 0.14); color: inherit; font: 600 13px/1 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; cursor: pointer; } .ds-toast button:hover { background: rgb(255 255 255 / 0.24); }"
     },
     {
       "name": "Context Menu",
@@ -163,6 +181,7 @@
       { "name": "The One Ink Rule", "body": "Ballpoint Blue is the only colour that means \"you can act on this\" or \"this is selected\". A new interactive state uses it; it never gets a second accent.", "section": "colors" },
       { "name": "The Meaning-Only Rule", "body": "Red, pink, yellow, orange and the source colours each mean exactly one thing. Never use them for decoration, illustration or emphasis.", "section": "colors" },
       { "name": "The White Paper Rule", "body": "The PDF page is always pure white with its paper shadow, in light and dark mode. Dark mode darkens the desk, never the paper.", "section": "colors" },
+      { "name": "The On-Paper Rule", "body": "Anything drawn on top of the page uses the `paper-*` tokens, never the desk tokens (`accent`, `danger`, `muted`), because the desk tokens change in dark mode and the paper doesn't.", "section": "colors" },
       { "name": "The System Font Rule", "body": "No web fonts. The app must work offline and under a CSP that blocks other origins, and it should look native on every platform.", "section": "typography" },
       { "name": "The Counted Numbers Rule", "body": "Every number that counts or changes (page numbers, rotation, counts, the page field, version) uses tabular figures.", "section": "typography" },
       { "name": "The Square Slot Rule", "body": "Every thumbnail sits centred in a square slot, sized so the page fits in any rotation. Rotating a page turns it in place and never reflows the grid.", "section": "layout" },
@@ -171,7 +190,7 @@
     "dos": [
       "Do use the CSS custom properties in `src/styles.css` (`--accent`, `--surface`, …), so dark mode follows automatically.",
       "Do keep Ballpoint Blue for interaction and selection only (The One Ink Rule).",
-      "Do keep pages white with the paper shadow in both modes (The White Paper Rule).",
+      "Do keep pages white with the paper shadow in both modes (The White Paper Rule), and draw on them with the `paper-*` tokens (The On-Paper Rule).",
       "Do give buttons a visible label on desktop. Only universal icons (undo, redo, help, close) may be icon-only. Under 720px secondary buttons collapse to icons; every button keeps a label for screen readers and a `title`.",
       "Do use `--ease-out` (`cubic-bezier(0.22, 1, 0.36, 1)`) and 120–260ms for motion, and leave the global reduced-motion override in place.",
       "Do use tabular figures for page numbers and counts."
@@ -180,7 +199,7 @@
       "Don't add shadows to bars, panels, cards or buttons at rest (The Only Paper Lifts Rule).",
       "Don't introduce a second accent colour or use the signal colours decoratively.",
       "Don't load web fonts, icon fonts or anything from another origin; icons are inline SVG from the sprite in `index.html`.",
-      "Don't hardcode colours. Existing exceptions to clean up: the selection frame (`.pick`, `.draft.select`, `.draft` background) hardcodes light-mode Ballpoint Blue, and the mark delete dot uses its own red instead of `--danger`.",
+      "Don't hardcode colours in rules; add a custom property in the token block at the top of `src/styles.css` (with its dark value, if it sits on the desk). The one literal left is the highlight fallback `rgb(255 235 64)`, which mirrors the default yellow in `src/annotations.js`.",
       "Don't make inputs smaller than 16px text on phones."
     ]
   }
