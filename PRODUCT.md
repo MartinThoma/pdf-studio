@@ -33,7 +33,8 @@ principles below.
   no account, no upload.
 - **Removed means removed.** Deleted pages, text and images are taken out of the file, not
   covered or left behind as unused objects. Links between pages are cut so a deleted page can't
-  come back.
+  come back. Private marks black out by default: what is under them is cut out of the text and
+  the images, and a black box is drawn.
 - **Works offline and installs as an app**, from a static site with no build step.
 - **Free and open source** (MIT).
 

@@ -3,6 +3,7 @@
 
 import { assemble, loadSource, markSource } from "./assemble.js";
 import { inspectObject, pageObjects } from "./content.js";
+import { imageCodec } from "./image-codec.js";
 
 const sources = new Map();
 
@@ -16,8 +17,9 @@ self.addEventListener("message", async ({ data }) => {
       sources.set(data.sourceId, doc);
       result = { pages };
     } else if (type === "export") {
-      const bytes = await assemble(sources, data.pages, { password: data.password });
-      result = { bytes };
+      const warnings = [];
+      const bytes = await assemble(sources, data.pages, { password: data.password, privateMarks: data.privateMarks, codec: imageCodec, warnings });
+      result = { bytes, warnings };
       transfer.push(bytes.buffer);
     } else if (type === "objects") {
       result = { objects: pageObjects(sources.get(data.sourceId).getPage(data.index)) };

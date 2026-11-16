@@ -11,9 +11,9 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
-import { PDFArray, PDFDocument, PDFName } from "../vendor/pdf-lib/pdf-lib.esm.min.js";
+import { PDFArray, PDFDocument, PDFName, PDFRawStream } from "../vendor/pdf-lib/pdf-lib.esm.min.js";
 import { describe, makeEncryptedPdf, makePdf } from "../tests/fixtures.js";
-import { contentBytes, pageObjects } from "../src/content.js";
+import { contentBytes, pageObjects, readOperators } from "../src/content.js";
 import { writeManifest } from "./build-manifest.js";
 import { startServer } from "./serve.js";
 
@@ -53,6 +53,12 @@ page.on("console", (message) => {
 page.on("dialog", (dialog) => dialog.accept());
 
 const step = (name) => console.log(`• ${name}`);
+/** The text a page's content shows, as plain text (what could be copied from it). */
+const shownText = (bytes) =>
+  readOperators(bytes)
+    .filter((operator) => ["Tj", "TJ", "'", '"'].includes(operator.op))
+    .map((operator) => operator.operands.flat().filter((operand) => operand?.bytes).map((operand) => String.fromCharCode(...operand.bytes)).join(""))
+    .join("");
 const order = () =>
   page.evaluate(() => window.pdfStudio.pages().map((p) => `${p.sourceId}:${p.index}:${p.rotation}`));
 const card = (n) => page.locator(".page").nth(n - 1);
@@ -230,6 +236,8 @@ try {
   // The new mark is selected: its fields are on the right.
   await page.waitForSelector("#pick-mark .mark-edit.private");
   assert.match(await page.locator("#pick-what").textContent(), /Private mark on page 2/);
+  assert.match(await page.locator("#pick-mark .note").textContent(), /Blacked out when you download/);
+  assert.match(await page.locator("#tool-hint").textContent(), /removed from the PDF and blacked out/);
   assert.equal(await page.locator('#pick-mark [data-field="text"]').inputValue(), "Report 4");
   assert.match(await page.locator("#pick-mark .token").textContent(), /\[NAME_1\]/);
   await page.locator('#pick-mark [data-field="comment"]').fill("the patient");
@@ -272,13 +280,87 @@ try {
   assert.equal(list.entries[0].text, "Report 4");
   assert.equal(list.entries[0].comment, "the patient");
   assert.deepEqual(list.replacements, { "[NAME_1]": "Report 4" });
+
+  step("a download blacks out the private mark: the text is gone, a black box is there, only the highlight is an annotation");
+  const [redacted] = await Promise.all([page.waitForEvent("download"), page.click("#download")]);
+  assert.match(await page.locator(".toast", { hasText: "Saved" }).last().textContent(), /1 private mark blacked out/);
+  const redactedPage = (await PDFDocument.load(readFileSync(await redacted.path()))).getPages()[1];
+  assert.equal(shownText(contentBytes(redactedPage)), "", "the marked text is cut out of the page");
+  assert.ok(readOperators(contentBytes(redactedPage)).some((operator) => operator.op === "re"), "a black box is drawn");
+  assert.equal(redactedPage.node.lookup(PDFName.of("Annots"), PDFArray).asArray().length, 1);
+
+  step("keeping private marks readable is a setting, remembered between visits");
+  await page.click("#download-options");
+  assert.equal(await page.locator("#redact").isChecked(), true, "blacking out is the default");
+  await page.uncheck("#redact");
+  assert.equal(await page.evaluate(() => localStorage.getItem("pdf-studio:private-marks")), "annotate");
+  assert.match(await page.locator("#redact-note").textContent(), /readable/);
+  await page.keyboard.press("Escape");
   const [marked] = await Promise.all([page.waitForEvent("download"), page.click("#download")]);
+  assert.match(await page.locator(".toast", { hasText: "Saved" }).last().textContent(), /text under 1 private mark is still readable/);
   const markedPdf = await PDFDocument.load(readFileSync(await marked.path()));
   const annots = markedPdf.getPages()[1].node.lookup(PDFName.of("Annots"), PDFArray).asArray();
   assert.equal(annots.length, 2);
   const annot = markedPdf.context.lookup(annots[0]);
   assert.equal(annot.get(PDFName.of("Contents")).decodeText(), "Report 4");
+  await page.click("#download-options");
+  await page.check("#redact");
+  assert.equal(await page.evaluate(() => localStorage.getItem("pdf-studio:private-marks")), null);
+  await page.keyboard.press("Escape");
   await page.screenshot({ path: join(DOCS, "screenshot.png") });
+
+  step("a JPEG scan: the pixels under a private mark are blacked out by the browser");
+  const jpeg = await page.evaluate(async () => {
+    const canvas = document.createElement("canvas");
+    canvas.width = 400;
+    canvas.height = 300;
+    const draw = canvas.getContext("2d");
+    draw.fillStyle = "#e02020";
+    draw.fillRect(0, 0, 200, 300);
+    draw.fillStyle = "#2020e0";
+    draw.fillRect(200, 0, 200, 300);
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.95));
+    return [...new Uint8Array(await blob.arrayBuffer())];
+  });
+  const scanDoc = await PDFDocument.create();
+  scanDoc.addPage([400, 300]).drawImage(await scanDoc.embedJpg(Uint8Array.from(jpeg)), { x: 0, y: 0, width: 400, height: 300 });
+  const scanFile = join(tmp, "scan.pdf");
+  writeFileSync(scanFile, await scanDoc.save());
+  const scan = await context.newPage();
+  scan.on("pageerror", (error) => problems.push(`page error (scan): ${error.message}`));
+  scan.on("console", (message) => message.type() === "error" && problems.push(`console (scan): ${message.text()}`));
+  await scan.goto(base);
+  await scan.setInputFiles("#file-input", scanFile);
+  await scan.waitForFunction(() => window.pdfStudio.pages().length === 1);
+  await scan.click("#view-details");
+  await scan.keyboard.press("p");
+  await scan.waitForFunction(() => document.querySelector(".stage-item.is-current canvas")?.width > 300);
+  const scanSheet = await scan.locator(".stage-item.is-current .sheet").boundingBox();
+  const scanAt = (u, v) => [scanSheet.x + u * scanSheet.width, scanSheet.y + v * scanSheet.height];
+  await scan.mouse.move(...scanAt(0.05, 0.05));
+  await scan.mouse.down();
+  await scan.mouse.move(...scanAt(0.35, 0.3), { steps: 6 });
+  await scan.mouse.up();
+  await scan.waitForSelector("#pick-mark .mark-edit.private");
+  const [scanned] = await Promise.all([scan.waitForEvent("download"), scan.click("#download")]);
+  assert.equal(await scan.locator(".toast.error").count(), 0, "nothing had to be removed as a whole");
+  const scanOut = await PDFDocument.load(readFileSync(await scanned.path()));
+  const images = [...scanOut.context.enumerateIndirectObjects()]
+    .map(([, object]) => object)
+    .filter((object) => object instanceof PDFRawStream && object.dict.get(PDFName.of("Subtype")) === PDFName.of("Image"));
+  assert.equal(images.length, 1, "the original scan is not left in the file");
+  assert.equal(images[0].dict.get(PDFName.of("Filter")), PDFName.of("DCTDecode"));
+  const sampled = await scan.evaluate(async (bytes) => {
+    const bitmap = await createImageBitmap(new Blob([Uint8Array.from(bytes)], { type: "image/jpeg" }));
+    const draw = Object.assign(document.createElement("canvas"), { width: bitmap.width, height: bitmap.height }).getContext("2d");
+    draw.drawImage(bitmap, 0, 0);
+    return [[80, 45], [80, 250], [300, 45]].map(([x, y]) => [...draw.getImageData(x, y, 1, 1).data.slice(0, 3)]);
+  }, [...images[0].contents]);
+  const [under, left, right] = sampled;
+  assert.ok(Math.max(...under) < 40, `under the mark: black (${under})`);
+  assert.ok(left[0] > 180 && left[2] < 80, `left, outside the mark: still red (${left})`);
+  assert.ok(right[2] > 180 && right[0] < 80, `right, outside the mark: still blue (${right})`);
+  await scan.close();
 
   step("details view: select a text and change it");
   await page.click("#view-details");

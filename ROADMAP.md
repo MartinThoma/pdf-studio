@@ -40,7 +40,9 @@ Done when: opening a file makes at most one copy in addition to the buffer that 
 Check the app on real phones: one low-end or mid-range Android phone (about 3–4 GB RAM, Chrome)
 and one iPhone (Safari). Desktop emulation is not enough: it slows the CPU, but it doesn't limit
 memory. Use a set of test files: a large scan (many pages of images), a long text PDF, a file with
-many small objects, and several files added together. For each one, run open, scroll through all
+many small objects, and several files added together. Include a download with a private mark on a
+large JPEG scan: blacking it out decodes the image to pixels (4 bytes per pixel on the canvas) and
+writes it again, which is the heaviest thing the app does. For each one, run open, scroll through all
 previews, the Details view, and export, with and without a password.
 
 Done when: the results are written down (in `docs/` or here), and the README line "Very large
@@ -66,6 +68,70 @@ exporting takes long enough on a phone that people would want to stop it.
 Done when: a long open or export shows a *Cancel* button, and cancelling leaves the
 pages that were already there as they were.
 
+## Redaction
+
+Follow-ups to blacking out private marks (README, *Privacy marks*).
+
+### R-REDACT_IMAGE_FORMATS
+
+A private mark over an image in a format that can't be edited in the browser (JPEG 2000, JBIG2,
+CCITT fax: common in scans and archive PDFs) removes the whole image, so a scanned page with a
+mark loses all of its content and the download only warns about it. Decode these formats (a
+WebAssembly decoder, as pdf.js has for them) and write the blanked pixels back, so only the marked
+area is lost.
+
+Done when: a page that is one JBIG2 or JPEG 2000 scan keeps everything outside the marks.
+
+### R-REDACT_VECTOR_TEXT
+
+Text that was turned into outlines, and other vector drawings, under a private mark are covered by
+the black box but stay in the file. Go with R-DELETE_VECTOR_DRAWINGS: once paths can be found and
+cut, a black-out should remove the ones that lie under a mark (and tell the user about the ones it
+could only partly cover, for example a line that runs through the mark and on).
+
+### R-REDACT_METADATA
+
+Title, author, subject and keywords are taken from the first file as they are. Let the user see
+and clear them when downloading.
+
+### R-REDACT_ALL_FONTS
+
+A black-out refuses pages with text in a font whose letter widths it can only guess: vertical
+writing, East Asian encodings other than Identity-H (code-to-CID maps such as 90ms-RKSJ-H), and
+missing or damaged fonts. Read the CMap (code lengths and CIDs) and vertical metrics, so these
+pages can be redacted too.
+
+## Usability
+
+From the design critique of 2026-11-16 (`/impeccable critique`, 27/40).
+
+### R-KEYBOARD_MARKS_AND_OBJECTS
+
+Highlighting, marking private and selecting objects in the Details view need a pointer, although
+PRODUCT.md says every action is reachable by keyboard. The strip makes every page a tab stop (a
+100-page file means 100 tabs) and its labels say "right-click for more".
+
+Done when: the objects of the current page can be reached with the keyboard (for example arrows
+or Tab through them, Enter to select, H / P to highlight or mark the selection); the strip uses a
+roving tabindex like the grid; its menu opens with Shift+F10 / the context-menu key and the label
+says so.
+
+### R-NARROW_DETAILS_PANEL
+
+Below 1000px (phones, and desktop windows at half the screen) the *Selected* panel and the mark
+list move below all pages, so the controls for a selection can be thousands of pixels away.
+
+Done when: below 1000px the panel is a sticky bottom sheet (or similar) that opens when something
+is selected and holds the mark list, and the hint no longer says "on the right" there.
+
+### R-PHONE_REORDER_DISCOVERY
+
+Reordering pages is a core operation on phones, but "press and hold to drag" is only explained
+in the shortcuts dialog, whose button is hidden at 720px and below.
+
+Done when: touch users get a one-time hint after their first selection, the selection actions
+offer *Move to start* / *Move to end*, and help is reachable on a phone.
+
 ## Editing gaps
 
 Things the editor can't do yet (see *Changing and deleting objects* and *Limitations* in the
@@ -73,7 +139,9 @@ README).
 
 ### R-DELETE_VECTOR_DRAWINGS
 
-Select and delete vector drawings (lines, shapes, charts), like text and images.
+Select and delete vector drawings (lines, shapes, charts), like text and images. Needs the content
+reader to follow paths and clipping, since a path that is cut out must not change what a later
+clip does.
 
 ### R-EDIT_INSIDE_GROUPS
 
@@ -82,9 +150,11 @@ page). Today a group can only be deleted as a whole.
 
 ### R-REMOVE_DELETED_GLYPHS
 
-After text is deleted, the letter shapes of an embedded font can stay in the file. For privacy
-marks and deleted names, subset or drop font glyphs that no remaining text uses, so the deleted
-text can't be reconstructed from the font.
+After text is deleted, or blacked out under a private mark, the letter shapes of an embedded font
+can stay in the file. The characters are gone from the page, but a font that holds a glyph for
+every letter of a name says little about the name; one that was subset for this document holds
+exactly its letters. Subset or drop font glyphs that no remaining text uses, so the deleted text
+can't be reconstructed from the font.
 
 ### R-CHANGED_TEXT_UNICODE
 

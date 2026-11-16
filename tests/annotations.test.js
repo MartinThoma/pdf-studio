@@ -95,12 +95,13 @@ test("privacyReport lists private marks with page, PDF coordinates and the way b
   assert.deepEqual(report.replacements, { "[NAME_1]": "Jane Doe", "[ADDRESS_1]": "Ulm", "[NAME_2]": "Max" });
 });
 
-test("assemble writes marks as highlight annotations that tools can read", async () => {
+test("assemble writes marks as highlight annotations that tools can read, when asked to keep them readable", async () => {
   const source = await loadSource(await makePdf({ count: 2 }));
   const pages = markedPages();
   const bytes = await assemble(
     new Map([["a", source.doc]]),
     pages.map((page) => ({ sourceId: "a", index: page.index, rotation: 0, marks: page.marks })),
+    { privateMarks: "annotate" },
   );
   const out = await PDFDocument.load(bytes);
   const read = (page) =>
