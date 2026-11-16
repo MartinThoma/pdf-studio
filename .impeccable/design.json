@@ -1,0 +1,206 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-16T00:00:00Z",
+  "title": "Design System: PDF Studio",
+  "extensions": {
+    "colorMeta": {
+      "accent": { "role": "primary", "displayName": "Ballpoint Blue", "canonical": "oklch(46.1% 0.197 267)", "tonalRamp": ["#020034", "#0b1967", "#1f389a", "#3659d0", "#5880f5", "#8aabfe", "#bdd1fe", "#e8eefe"] },
+      "accent-hover": { "role": "primary", "displayName": "Deep Ballpoint" },
+      "accent-soft": { "role": "primary", "displayName": "Blue Wash" },
+      "accent-ink": { "role": "primary", "displayName": "Ink on Ballpoint" },
+      "bg": { "role": "neutral", "displayName": "Desk", "canonical": "oklch(96.4% 0.005 95)", "tonalRamp": ["#0b0b0a", "#272624", "#464542", "#676663", "#8a8986", "#afaeab", "#d1d1ce", "#efeeec"] },
+      "surface": { "role": "neutral", "displayName": "Card White" },
+      "surface-2": { "role": "neutral", "displayName": "Pressed Desk" },
+      "text": { "role": "neutral", "displayName": "Ink", "canonical": "oklch(23.0% 0.004 106)", "tonalRamp": ["#0b0b0a", "#262625", "#454543", "#666664", "#898987", "#aeaeac", "#d1d1cf", "#eeeeed"] },
+      "muted": { "role": "neutral", "displayName": "Pencil", "canonical": "oklch(52.7% 0.009 99)", "tonalRamp": ["#0c0b09", "#272623", "#464541", "#676661", "#8a8984", "#afaea9", "#d2d1cd", "#efeeeb"] },
+      "border": { "role": "neutral", "displayName": "Rule Line", "canonical": "oklch(89.4% 0.010 93)", "tonalRamp": ["#0c0b09", "#272623", "#464540", "#686660", "#8b8983", "#afaea9", "#d2d1cc", "#f0eeea"] },
+      "paper": { "role": "neutral", "displayName": "Paper" },
+      "paper-skeleton": { "role": "neutral", "displayName": "Paper Skeleton" },
+      "paper-muted": { "role": "neutral", "displayName": "Paper Pencil" },
+      "paper-accent": { "role": "primary", "displayName": "Ballpoint on Paper" },
+      "paper-danger": { "role": "secondary", "displayName": "Danger on Paper" },
+      "paper-private-edge": { "role": "tertiary", "displayName": "Privacy Edge" },
+      "danger": { "role": "secondary", "displayName": "Danger Red", "canonical": "oklch(51.3% 0.170 27)", "tonalRamp": ["#1e0001", "#4e0304", "#7f1714", "#b0332d", "#d75e53", "#f68b7f", "#febfb6", "#fee9e6"] },
+      "danger-soft": { "role": "secondary", "displayName": "Red Wash" },
+      "danger-ink": { "role": "secondary", "displayName": "Ink on Danger" },
+      "private": { "role": "tertiary", "displayName": "Privacy Pink", "canonical": "oklch(63.7% 0.215 13)", "tonalRamp": ["#1e0005", "#4d0317", "#82062c", "#bb1344", "#e64666", "#fe8292", "#ffbdc2", "#ffe8ea"] },
+      "private-strong": { "role": "tertiary", "displayName": "Privacy Crimson" },
+      "private-ink": { "role": "tertiary", "displayName": "Ink on Privacy" },
+      "highlight": { "role": "tertiary", "displayName": "Highlighter Yellow", "canonical": "oklch(80.3% 0.164 89)", "tonalRamp": ["#100a00", "#312500", "#554205", "#7d6200", "#a88402", "#ceaa41", "#edce7b", "#ffedc0"] },
+      "highlight-ink": { "role": "tertiary", "displayName": "Ink on Highlighter" },
+      "removed": { "role": "neutral", "displayName": "Removed Grey" },
+      "update": { "role": "tertiary", "displayName": "Update Orange", "canonical": "oklch(67.7% 0.162 56)", "tonalRamp": ["#170600", "#3d1d01", "#693502", "#98510a", "#ca6d12", "#ea9859", "#fec399", "#ffeadc"] },
+      "warning-soft": { "role": "tertiary", "displayName": "Warning Amber" },
+      "warning-ink": { "role": "tertiary", "displayName": "Ink on Warning Amber" },
+      "toast-bg": { "role": "neutral", "displayName": "Toast Ink" },
+      "toast-ink": { "role": "neutral", "displayName": "Toast Paper" },
+      "danger-ink-dark": { "role": "secondary", "displayName": "Ink on Night Danger" },
+      "warning-soft-dark": { "role": "tertiary", "displayName": "Night Warning Amber" },
+      "warning-ink-dark": { "role": "tertiary", "displayName": "Ink on Night Warning Amber" },
+      "toast-bg-dark": { "role": "neutral", "displayName": "Night Toast" },
+      "toast-ink-dark": { "role": "neutral", "displayName": "Night Toast Ink" },
+      "bg-dark": { "role": "neutral", "displayName": "Night Desk" },
+      "surface-dark": { "role": "neutral", "displayName": "Night Card" },
+      "surface-2-dark": { "role": "neutral", "displayName": "Night Pressed" },
+      "text-dark": { "role": "neutral", "displayName": "Night Ink" },
+      "muted-dark": { "role": "neutral", "displayName": "Night Pencil" },
+      "border-dark": { "role": "neutral", "displayName": "Night Rule Line" },
+      "accent-dark": { "role": "primary", "displayName": "Night Ballpoint" },
+      "accent-hover-dark": { "role": "primary", "displayName": "Night Ballpoint, hover" },
+      "accent-soft-dark": { "role": "primary", "displayName": "Night Blue Wash" },
+      "accent-ink-dark": { "role": "primary", "displayName": "Ink on Night Ballpoint" },
+      "danger-dark": { "role": "secondary", "displayName": "Night Danger" },
+      "danger-soft-dark": { "role": "secondary", "displayName": "Night Red Wash" }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display", "purpose": "The empty-state heading only." },
+      "headline": { "displayName": "Headline", "purpose": "Dialog titles." },
+      "title": { "displayName": "Title", "purpose": "The PDF Studio wordmark." },
+      "body": { "displayName": "Body", "purpose": "Base text, dialogs; toasts at 14px." },
+      "label": { "displayName": "Label", "purpose": "Buttons, menu items, toasts." },
+      "label-small": { "displayName": "Label small", "purpose": "Small buttons, field labels, hints, the selection count, page captions." },
+      "caption": { "displayName": "Caption", "purpose": "Panel field labels and the strip's page numbers; at 400 for file names under pages and mark-list comments." },
+      "badge": { "displayName": "Badge", "purpose": "Rotation and mark badges on thumbnails, mark kinds; tabular figures." },
+      "mono": { "displayName": "Mono", "purpose": "PDF source in the developer options only." }
+    },
+    "shadows": [
+      { "name": "paper", "value": "0 1px 2px rgb(0 0 0 / 0.12), 0 4px 14px rgb(0 0 0 / 0.07)", "purpose": "Every PDF page (dark mode: 0.5 / 0.35)." },
+      { "name": "hover-tools", "value": "0 2px 10px rgb(0 0 0 / 0.18)", "purpose": "Rotate/delete bar on a page card." },
+      { "name": "badge", "value": "0 1px 4px rgb(0 0 0 / 0.18)", "purpose": "Rotation badge, strip delete button, mark delete dot." },
+      { "name": "menu", "value": "0 8px 28px rgb(0 0 0 / 0.22)", "purpose": "Context menus and the download panel." },
+      { "name": "toast", "value": "0 8px 28px rgb(0 0 0 / 0.25)", "purpose": "Toasts." },
+      { "name": "lifted", "value": "0 12px 32px rgb(0 0 0 / 0.25)", "purpose": "The drag ghost card." },
+      { "name": "dialog", "value": "0 24px 64px rgb(0 0 0 / 0.3)", "purpose": "Dialogs, over a 35% black backdrop." }
+    ],
+    "motion": [
+      { "name": "ease-out", "value": "cubic-bezier(0.22, 1, 0.36, 1)", "purpose": "Default easing for things settling into place (--ease-out)." },
+      { "name": "state", "value": "120ms", "purpose": "Hover and colour changes." },
+      { "name": "press", "value": "100ms, scale(0.97)", "purpose": "Button press." },
+      { "name": "enter", "value": "160–260ms ease-out", "purpose": "Check disc, hover tools, new pages, toasts, page rotation (220ms)." },
+      { "name": "exit", "value": "160ms ease-in", "purpose": "Toast leaving." },
+      { "name": "reduced-motion", "value": "1ms", "purpose": "All animations and transitions under prefers-reduced-motion." }
+    ],
+    "breakpoints": [
+      { "name": "phone", "value": "720px", "purpose": "Secondary buttons become icon-only, thumbnails 132px, size slider and shortcuts hidden." },
+      { "name": "details-single-column", "value": "1000px", "purpose": "Details view drops the strip and moves the panel below the stage." }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The one filled action per bar: Download, Choose PDF files.",
+      "html": "<button class=\"ds-btn ds-btn-primary\"><svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M12 4v11m-4.5-4.5L12 15l4.5-4.5M5 19.5h14\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg>Download</button>",
+      "css": ".ds-btn { display: inline-flex; align-items: center; justify-content: center; gap: 0.45em; height: 38px; padding: 0 14px; border: 1px solid var(--border, #dedcd5); border-radius: 8px; background: var(--surface, #fff); color: var(--text, #1d1d1b); font: 500 14px/1 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; cursor: pointer; white-space: nowrap; transition: background-color 120ms, border-color 120ms, color 120ms, transform 100ms; } .ds-btn svg { width: 20px; height: 20px; } .ds-btn:active { transform: scale(0.97); } .ds-btn:focus-visible { outline: 2px solid var(--accent, #2847c4); outline-offset: 2px; } .ds-btn-primary { background: var(--accent, #2847c4); border-color: var(--accent, #2847c4); color: var(--accent-ink, #fff); } .ds-btn-primary:hover { background: var(--accent-hover, #1f3aa6); border-color: var(--accent-hover, #1f3aa6); }"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button",
+      "description": "Default button: Add PDFs, Privacy list, rotate.",
+      "html": "<button class=\"ds-btn2\"><svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M12 5v14M5 12h14\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\"/></svg>Add PDFs</button>",
+      "css": ".ds-btn2 { display: inline-flex; align-items: center; gap: 0.45em; height: 38px; padding: 0 14px; border: 1px solid var(--border, #dedcd5); border-radius: 8px; background: var(--surface, #fff); color: var(--text, #1d1d1b); font: 500 14px/1 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; cursor: pointer; transition: background-color 120ms, transform 100ms; } .ds-btn2 svg { width: 20px; height: 20px; } .ds-btn2:hover { background: var(--surface-2, #ecebe6); } .ds-btn2:active { transform: scale(0.97); } .ds-btn2:focus-visible { outline: 2px solid var(--accent, #2847c4); outline-offset: 2px; }"
+    },
+    {
+      "name": "Ghost Button",
+      "kind": "button",
+      "refersTo": "button-ghost",
+      "description": "Low-weight actions: Start over, Install, help.",
+      "html": "<button class=\"ds-btn-ghost\">Start over</button>",
+      "css": ".ds-btn-ghost { display: inline-flex; align-items: center; height: 32px; padding: 0 10px; border: 1px solid transparent; border-radius: 8px; background: transparent; color: var(--text, #1d1d1b); font: 500 13px/1 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; cursor: pointer; transition: background-color 120ms; } .ds-btn-ghost:hover { background: var(--surface-2, #ecebe6); } .ds-btn-ghost:focus-visible { outline: 2px solid var(--accent, #2847c4); outline-offset: 2px; }"
+    },
+    {
+      "name": "Danger Button",
+      "kind": "button",
+      "refersTo": "button-danger",
+      "description": "Delete actions: red label, red wash on hover.",
+      "html": "<button class=\"ds-btn-danger\"><svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M4.5 6.5h15M9.5 6.5V4.8c0-.7.6-1.3 1.3-1.3h2.4c.7 0 1.3.6 1.3 1.3v1.7M6.5 6.5l.8 12.1c.1 1 .9 1.9 2 1.9h5.4c1.1 0 1.9-.9 2-1.9l.8-12.1\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.7\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg>Delete</button>",
+      "css": ".ds-btn-danger { display: inline-flex; align-items: center; gap: 0.45em; height: 32px; padding: 0 10px; border: 1px solid var(--border, #dedcd5); border-radius: 8px; background: var(--surface, #fff); color: var(--danger, #b4302a); font: 500 13px/1 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; cursor: pointer; transition: background-color 120ms, border-color 120ms; } .ds-btn-danger svg { width: 18px; height: 18px; } .ds-btn-danger:hover { background: var(--danger-soft, #f8e4e2); border-color: var(--danger-soft, #f8e4e2); } .ds-btn-danger:focus-visible { outline: 2px solid var(--accent, #2847c4); outline-offset: 2px; }"
+    },
+    {
+      "name": "Text Input",
+      "kind": "input",
+      "refersTo": "text-input",
+      "description": "File name and password fields; 16px text so phones don't zoom.",
+      "html": "<label class=\"ds-field\">File name<input class=\"ds-input\" value=\"report-merged.pdf\"></label>",
+      "css": ".ds-field { display: grid; gap: 5px; font: 500 13px system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; color: var(--muted, #6c6b65); } .ds-input { width: 100%; height: 36px; padding: 0 10px; border: 1px solid var(--border, #dedcd5); border-radius: 8px; background: var(--surface, #fff); color: var(--text, #1d1d1b); font: 16px system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; } .ds-input:focus-visible { outline: 2px solid var(--accent, #2847c4); outline-offset: 2px; } .ds-input[aria-invalid='true'] { border-color: var(--danger, #b4302a); }"
+    },
+    {
+      "name": "View Switch",
+      "kind": "nav",
+      "refersTo": "view-switch-active",
+      "description": "Segmented control between Arrange and Details.",
+      "html": "<div class=\"ds-switch\" role=\"group\"><button aria-pressed=\"true\">Arrange</button><button aria-pressed=\"false\">Details</button></div>",
+      "css": ".ds-switch { display: inline-flex; gap: 2px; padding: 2px; border: 1px solid var(--border, #dedcd5); border-radius: 10px; background: var(--surface, #fff); } .ds-switch button { height: 32px; padding: 0 10px; border: 1px solid transparent; border-radius: 8px; background: transparent; color: var(--text, #1d1d1b); font: 500 13px/1 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; cursor: pointer; transition: background-color 120ms; } .ds-switch button:hover { background: var(--surface-2, #ecebe6); } .ds-switch button[aria-pressed='true'] { background: var(--accent-soft, #e3e8fb); color: var(--accent, #2847c4); } .ds-switch button:focus-visible { outline: 2px solid var(--accent, #2847c4); outline-offset: 2px; }"
+    },
+    {
+      "name": "Selection Count",
+      "kind": "chip",
+      "refersTo": "selection-count",
+      "description": "Pill showing how many pages are selected.",
+      "html": "<span class=\"ds-count\">2 selected</span>",
+      "css": ".ds-count { display: inline-block; padding: 4px 10px; border-radius: 999px; background: var(--accent-soft, #e3e8fb); color: var(--accent, #2847c4); font: 600 13px system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; }"
+    },
+    {
+      "name": "Page Card",
+      "kind": "card",
+      "refersTo": "page-card-selected",
+      "description": "Signature component: paper in a square slot, caption with number, source dot and origin; selected state shown.",
+      "html": "<div class=\"ds-page\" aria-selected=\"true\"><div class=\"ds-thumb\"><div class=\"ds-paper\"></div><span class=\"ds-check\"><svg viewBox=\"0 0 24 24\"><path d=\"m5.5 12.5 4 4 9-9\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg></span></div><div class=\"ds-caption\"><b>2</b><i class=\"ds-dot\"></i><span>report.pdf · p. 4</span></div></div>",
+      "css": ".ds-page { position: relative; display: flex; flex-direction: column; gap: 8px; width: 168px; padding: 8px 8px 6px; border-radius: 10px; font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; transition: background-color 120ms; } .ds-page:hover { background: color-mix(in srgb, var(--surface-2, #ecebe6) 70%, transparent); } .ds-page[aria-selected='true'] { background: var(--accent-soft, #e3e8fb); } .ds-thumb { position: relative; aspect-ratio: 1; display: grid; place-items: center; } .ds-paper { width: 71%; height: 100%; background: #fff; border-radius: 2px; box-shadow: 0 1px 2px rgb(0 0 0 / 0.12), 0 4px 14px rgb(0 0 0 / 0.07); } .ds-page[aria-selected='true'] .ds-paper { outline: 3px solid var(--accent, #2847c4); outline-offset: 3px; } .ds-check { position: absolute; top: -4px; left: -4px; width: 24px; height: 24px; display: grid; place-items: center; border-radius: 50%; background: var(--accent, #2847c4); color: var(--accent-ink, #fff); box-shadow: 0 0 0 2px var(--bg, #f4f3ef); } .ds-check svg { width: 15px; height: 15px; } .ds-caption { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text, #1d1d1b); } .ds-caption b { font-weight: 650; font-variant-numeric: tabular-nums; } .ds-caption span { color: var(--muted, #6c6b65); font-size: 12px; } .ds-dot { width: 8px; height: 8px; border-radius: 50%; background: #2847c4; }"
+    },
+    {
+      "name": "Toast",
+      "kind": "custom",
+      "refersTo": "toast",
+      "description": "Bottom-centre message with an optional Undo action.",
+      "html": "<div class=\"ds-toast\"><span>Deleted 1 page.</span><button>Undo</button></div>",
+      "css": ".ds-toast { display: flex; align-items: center; gap: 12px; width: min(480px, 100%); padding: 10px 10px 10px 16px; border-radius: 10px; background: var(--toast-bg, #1e1e1c); color: var(--toast-ink, #f2f1ec); box-shadow: 0 8px 28px rgb(0 0 0 / 0.25); font: 14px system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; } .ds-toast span { flex: 1; } .ds-toast button { height: 32px; padding: 0 12px; border: 0; border-radius: 7px; background: rgb(255 255 255 / 0.14); color: inherit; font: 600 13px/1 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; cursor: pointer; } .ds-toast button:hover { background: rgb(255 255 255 / 0.24); }"
+    },
+    {
+      "name": "Context Menu",
+      "kind": "custom",
+      "refersTo": "menu",
+      "description": "Right-click menu on a page in the strip.",
+      "html": "<div class=\"ds-menu\" role=\"menu\"><button>Rotate left</button><button>Rotate right</button><button class=\"danger\">Delete page</button></div>",
+      "css": ".ds-menu { display: grid; min-width: 170px; padding: 5px; border: 1px solid var(--border, #dedcd5); border-radius: 10px; background: var(--surface, #fff); box-shadow: 0 8px 28px rgb(0 0 0 / 0.22); } .ds-menu button { display: flex; align-items: center; height: 34px; padding: 0 10px; border: 0; border-radius: 6px; background: none; color: var(--text, #1d1d1b); font: 14px system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; text-align: left; cursor: pointer; } .ds-menu button:hover, .ds-menu button:focus-visible { background: var(--surface-2, #ecebe6); outline: none; } .ds-menu button.danger { color: var(--danger, #b4302a); } .ds-menu button.danger:hover { background: var(--danger-soft, #f8e4e2); }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Paper Desk",
+    "overview": "PDF Studio is a calm, warm desk with paper on it. The desk (the background and every bar and panel) is flat, warm off-white and stays out of the way; the pages are white sheets with a soft shadow, the only things on screen with weight. Tools sit at the edges of the desk: a top bar, a context bar under it, and in the Details view a strip on the left and a panel on the right. The middle belongs to the pages.\n\nThe mood is calm, plain and paper-first. One blue accent, Ballpoint Blue, marks everything you can act on or have selected. Every other colour carries a fixed meaning (danger, privacy, highlight, which file a page comes from) and never decorates. Type is the system font at small, dense sizes, as in a native app. Motion is short and quiet: things settle into place, they don't perform.\n\nLight and dark mode follow the system setting. In dark mode the desk turns to Night Desk; the pages stay white, because they are paper.",
+    "keyCharacteristics": [
+      "Flat warm chrome, white paper with the only real shadow.",
+      "One interactive accent (Ballpoint Blue); all other hues are meanings.",
+      "System font, small sizes (12–17px), tabular numbers for anything counted.",
+      "Thin 1px borders and 8–10px corners; states shown by tint, not by weight.",
+      "Short ease-out motion (120–260ms), switched off under reduced motion."
+    ],
+    "rules": [
+      { "name": "The One Ink Rule", "body": "Ballpoint Blue is the only colour that means \"you can act on this\" or \"this is selected\". A new interactive state uses it; it never gets a second accent.", "section": "colors" },
+      { "name": "The Meaning-Only Rule", "body": "Red, pink, yellow, orange and the source colours each mean exactly one thing. Never use them for decoration, illustration or emphasis.", "section": "colors" },
+      { "name": "The White Paper Rule", "body": "The PDF page is always pure white with its paper shadow, in light and dark mode. Dark mode darkens the desk, never the paper.", "section": "colors" },
+      { "name": "The On-Paper Rule", "body": "Anything drawn on top of the page uses the `paper-*` tokens, never the desk tokens (`accent`, `danger`, `muted`), because the desk tokens change in dark mode and the paper doesn't.", "section": "colors" },
+      { "name": "The System Font Rule", "body": "No web fonts. The app must work offline and under a CSP that blocks other origins, and it should look native on every platform.", "section": "typography" },
+      { "name": "The Counted Numbers Rule", "body": "Every number that counts or changes (page numbers, rotation, counts, the page field, version) uses tabular figures.", "section": "typography" },
+      { "name": "The Square Slot Rule", "body": "Every thumbnail sits centred in a square slot, sized so the page fits in any rotation. Rotating a page turns it in place and never reflows the grid.", "section": "layout" },
+      { "name": "The Only Paper Lifts Rule", "body": "Only paper and floating layers (menus, toasts, dialogs, the drag ghost, hover tools) cast shadows. Never add a shadow to a bar, panel, card or button at rest.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do use the CSS custom properties in `src/styles.css` (`--accent`, `--surface`, …), so dark mode follows automatically.",
+      "Do keep Ballpoint Blue for interaction and selection only (The One Ink Rule).",
+      "Do keep pages white with the paper shadow in both modes (The White Paper Rule), and draw on them with the `paper-*` tokens (The On-Paper Rule).",
+      "Do give buttons a visible label on desktop. Only universal icons (undo, redo, help, close) may be icon-only. Under 720px secondary buttons collapse to icons; every button keeps a label for screen readers and a `title`.",
+      "Do use `--ease-out` (`cubic-bezier(0.22, 1, 0.36, 1)`) and 120–260ms for motion, and leave the global reduced-motion override in place.",
+      "Do use tabular figures for page numbers and counts."
+    ],
+    "donts": [
+      "Don't add shadows to bars, panels, cards or buttons at rest (The Only Paper Lifts Rule).",
+      "Don't introduce a second accent colour or use the signal colours decoratively.",
+      "Don't load web fonts, icon fonts or anything from another origin; icons are inline SVG from the sprite in `index.html`.",
+      "Don't hardcode colours in rules; add a custom property in the token block at the top of `src/styles.css` (with its dark value, if it sits on the desk). The one literal left is the highlight fallback `rgb(255 235 64)`, which mirrors the default yellow in `src/annotations.js`.",
+      "Don't make inputs smaller than 16px text on phones."
+    ]
+  }
+}

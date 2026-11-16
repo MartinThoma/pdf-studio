@@ -208,6 +208,8 @@
     <label class="field"><span>File name</span>
       <input type="text" class="text-input" id="file-name" spellcheck="false" autocomplete="off" enterkeyhint="done">
     </label>
+    <label class="option"><input type="checkbox" id="redact" checked><span>Black out private marks</span></label>
+    <p class="panel-note" id="redact-note"></p>
     <label class="option"><input type="checkbox" id="protect"><span>Protect with a password</span></label>
     <div class="protect-fields" id="protect-fields" hidden>
       <input type="password" class="text-input" id="protect-password" placeholder="Password" aria-label="Password" autocomplete="new-password" spellcheck="false">
@@ -280,7 +282,7 @@
         <dt>Details: <kbd>Del</kbd></dt><dd>Delete the selected objects</dd>
         <dt>Details: <kbd>R</kbd> / <kbd>Shift</kbd> + <kbd>R</kbd></dt><dd>Rotate the page right / left</dd>
       </dl>
-      <p class="hint">In the Details view, drag over text with the Highlight or Mark private tool. Private marks are saved in the PDF as annotations that pseudonymizing tools can find, and the Privacy list button saves them as JSON. With the mouse: drag pages to reorder them. <kbd>Ctrl</kbd>-click or <kbd>Shift</kbd>-click selects several. On a touch screen, tap to select and press and hold to drag.</p>
+      <p class="hint">In the Details view, drag over text with the Highlight or Mark private tool. When you download, the text under a private mark is removed from the PDF and blacked out; the download options can keep it readable instead, as an annotation that pseudonymizing tools can find. The Privacy list button saves the marks as JSON. With the mouse: drag pages to reorder them. <kbd>Ctrl</kbd>-click or <kbd>Shift</kbd>-click selects several. On a touch screen, tap to select and press and hold to drag.</p>
       <label class="dev-toggle">
         <input type="checkbox" id="dev-options">
         <span>Developer options: show how a selected object is written in the PDF</span>

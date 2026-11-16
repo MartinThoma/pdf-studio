@@ -233,7 +233,12 @@ function standardWidths(baseFont) {
   }
 }
 
-/** { bytesPerCode, width(code) in 1/1000 of the font size, ascent, descent } for a font dictionary. */
+/**
+ * { bytesPerCode, width(code) in 1/1000 of the font size, ascent, descent, exact } for a font
+ * dictionary. `exact` is false when the widths are guessed (no widths in the file, a font that
+ * is missing, an encoding other than Identity-H, vertical writing): then where each character
+ * lands is only approximate, which is good enough to pick a run but not to redact one.
+ */
 function readFont(dict, context) {
   const font = readFontMetrics(dict, context);
   const baseFont = dict instanceof PDFDict ? dict.lookup(name("BaseFont")) : null;
@@ -241,7 +246,7 @@ function readFont(dict, context) {
 }
 
 function readFontMetrics(dict, context) {
-  const fallback = { bytesPerCode: 1, width: () => 500, ascent: 0.9, descent: -0.25 };
+  const fallback = { bytesPerCode: 1, width: () => 500, ascent: 0.9, descent: -0.25, exact: false };
   if (!(dict instanceof PDFDict)) return fallback;
   const subtype = dict.lookup(name("Subtype"));
   const metrics = (descriptor) => {
@@ -273,10 +278,13 @@ function readFontMetrics(dict, context) {
         }
       }
     }
+    // Codes are CIDs, two bytes each, written left to right, only with Identity-H.
+    const encoding = dict.lookup(name("Encoding"));
     return {
       bytesPerCode: 2,
       width: (code) => widths.get(code) ?? defaultWidth,
       ...metrics(cid.lookup(name("FontDescriptor"))),
+      exact: encoding === name("Identity-H"),
     };
   }
 
@@ -295,19 +303,20 @@ function readFontMetrics(dict, context) {
       bytesPerCode: 1,
       width: (code) => (list[code - firstChar] ?? missing) * scale,
       ...metrics(descriptor),
+      exact: true,
     };
   }
   const baseFont = dict.lookup(name("BaseFont"));
   const standard = baseFont instanceof PDFName ? standardWidths(baseFont.decodeText()) : null;
-  return { ...fallback, ...(standard ? { width: standard } : {}), ...metrics(descriptor) };
+  return { ...fallback, ...(standard ? { width: standard, exact: true } : {}), ...metrics(descriptor) };
 }
 
 // ---------------------------------------------------------------------------------------------
 // Following the state: where does each run and image land?
 
 // A matrix is [a, b, c, d, e, f]; mul(m, n) applies m first, then n.
-const IDENTITY = [1, 0, 0, 1, 0, 0];
-const mul = (m, n) => [
+export const IDENTITY = [1, 0, 0, 1, 0, 0];
+export const mul = (m, n) => [
   m[0] * n[0] + m[1] * n[2],
   m[0] * n[1] + m[1] * n[3],
   m[2] * n[0] + m[3] * n[2],
@@ -315,7 +324,7 @@ const mul = (m, n) => [
   m[4] * n[0] + m[5] * n[2] + n[4],
   m[4] * n[1] + m[5] * n[3] + n[5],
 ];
-const apply = (m, [x, y]) => [m[0] * x + m[2] * y + m[4], m[1] * x + m[3] * y + m[5]];
+export const apply = (m, [x, y]) => [m[0] * x + m[2] * y + m[4], m[1] * x + m[3] * y + m[5]];
 const numbers = (operands, count) => {
   const list = operands.filter((operand) => typeof operand === "number");
   return list.length >= count ? list.slice(-count) : null;
@@ -323,15 +332,20 @@ const numbers = (operands, count) => {
 
 /**
  * Walks the operators and returns the drawn objects as
- * { index, type, points: four corners in PDF space, xobject?: name, replacement: string },
+ * { index, type, points: four corners in PDF space, xobject?: name, ctm?, replacement: string },
  * where `replacement` is what must stand in for the operator when it is deleted (for text: a
  * move of the pen by the same distance, so that what follows stays where it was). Text runs
  * also carry what is needed to write other text in their place: `matrix` (one unit = the font
  * size, origin at the start of the run), `paint` (colour and render mode) and `baseFont`.
+ *
+ * `options.ctm` is the transformation the content starts in (a form XObject's content starts in
+ * its own matrix times the one it was drawn with), `options.resources` the resource dictionary to
+ * use instead of the page's, and `options.glyphs` makes text runs carry their single characters
+ * for redact.js. Images and forms also carry the `ctm` they are drawn with, forms their `matrix`.
  */
-export function interpret(operators, page) {
+export function interpret(operators, page, { ctm: startCtm = IDENTITY, resources: given, glyphs = false } = {}) {
   const { context } = page.doc;
-  const resources = page.node.Resources?.() ?? page.node.lookup(name("Resources"));
+  const resources = given ?? page.node.Resources?.() ?? page.node.lookup(name("Resources"));
   const dictOf = (kind) => {
     const dict = resources instanceof PDFDict ? resources.lookup(name(kind)) : null;
     return dict instanceof PDFDict ? dict : null;
@@ -346,7 +360,7 @@ export function interpret(operators, page) {
 
   const found = [];
   const stack = [];
-  let ctm = IDENTITY;
+  let ctm = startCtm;
   let text = { font: null, size: 0, charSpace: 0, wordSpace: 0, scale: 1, leading: 0, rise: 0, mode: 0 };
   let fill = "0 g";
   let tm = IDENTITY;
@@ -356,26 +370,32 @@ export function interpret(operators, page) {
     tm = lineMatrix;
   };
 
-  // Shows strings (and the numbers of TJ), returns the distance the pen moved.
+  // Shows strings (and the numbers of TJ), returns the distance the pen moved. With `glyphs` it
+  // also lists the parts of the run: { number } for a TJ number, { raw, x0, advance } for a
+  // character (its code bytes, where it starts and how far it moves the pen).
   const show = (items) => {
-    const font = text.font ?? { bytesPerCode: 1, width: () => 500, ascent: 0.9, descent: -0.25 };
+    const font = text.font ?? { bytesPerCode: 1, width: () => 500, ascent: 0.9, descent: -0.25, exact: false };
     let advance = 0;
+    const parts = [];
     for (const item of items) {
       if (typeof item === "number") {
         advance -= (item / 1000) * text.size * text.scale;
+        if (glyphs) parts.push({ number: item });
       } else if (item?.bytes) {
         const codes = item.bytes;
         for (let k = 0; k + font.bytesPerCode <= codes.length; k += font.bytesPerCode) {
           const code = font.bytesPerCode === 2 ? codes[k] * 256 + codes[k + 1] : codes[k];
           const space = font.bytesPerCode === 1 && code === 32 ? text.wordSpace : 0;
-          advance += ((font.width(code) / 1000) * text.size + text.charSpace + space) * text.scale;
+          const step = ((font.width(code) / 1000) * text.size + text.charSpace + space) * text.scale;
+          if (glyphs) parts.push({ raw: codes.slice(k, k + font.bytesPerCode), x0: advance, advance: step });
+          advance += step;
         }
       }
     }
-    return { advance, font };
+    return { advance, font, parts };
   };
   const textRun = (index, items, prefix) => {
-    const { advance, font } = show(items);
+    const { advance, font, parts } = show(items);
     const matrix = mul(tm, ctm);
     const low = font.descent * text.size + text.rise;
     const high = font.ascent * text.size + text.rise;
@@ -391,6 +411,7 @@ export function interpret(operators, page) {
         baseFont: font.baseFont ?? "",
         fontResource: text.fontResource ?? "",
         size: text.size,
+        ...(glyphs ? { parts, prefix, unit, low, high, full: matrix, exact: Boolean(font.exact) } : {}),
       });
     }
     tm = mul([1, 0, 0, 1, advance, 0], tm);
@@ -463,7 +484,7 @@ export function interpret(operators, page) {
         break;
       }
       case "BI":
-        found.push({ index, type: "image", points: [[0, 0], [1, 0], [1, 1], [0, 1]].map((p) => apply(ctm, p)), replacement: "" });
+        found.push({ index, type: "image", ctm, points: [[0, 0], [1, 0], [1, 1], [0, 1]].map((p) => apply(ctm, p)), replacement: "" });
         break;
       case "Do": {
         const xName = operands.find((operand) => operand?.name !== undefined)?.name;
@@ -473,19 +494,22 @@ export function interpret(operators, page) {
         if (dict.lookup(name("Subtype")) === name("Form")) {
           const bbox = dict.lookup(name("BBox"));
           const matrixArray = dict.lookup(name("Matrix"));
-          if (!(bbox instanceof PDFArray) || bbox.size() < 4) break;
-          const [x0, y0, x1, y1] = [0, 1, 2, 3].map((k) => num(bbox.lookup(k)));
+          // A form must have a /BBox; viewers draw one without it anyway, so for redaction it
+          // could be anywhere. Picking it in the editor still needs a real box.
+          const hasBox = bbox instanceof PDFArray && bbox.size() >= 4;
+          if (!hasBox && !glyphs) break;
+          const [x0, y0, x1, y1] = hasBox ? [0, 1, 2, 3].map((k) => num(bbox.lookup(k))) : [-1e7, -1e7, 1e7, 1e7];
           const own = matrixArray instanceof PDFArray && matrixArray.size() === 6
             ? [0, 1, 2, 3, 4, 5].map((k) => num(matrixArray.lookup(k)))
             : IDENTITY;
           const matrix = mul(own, ctm);
           found.push({
-            index, type: "group", xobject: xName, replacement: "",
+            index, type: "group", xobject: xName, replacement: "", ctm, matrix: own,
             points: [[x0, y0], [x1, y0], [x1, y1], [x0, y1]].map((p) => apply(matrix, p)),
           });
         } else {
           found.push({
-            index, type: "image", xobject: xName, replacement: "",
+            index, type: "image", xobject: xName, replacement: "", ctm,
             points: [[0, 0], [1, 0], [1, 1], [0, 1]].map((p) => apply(ctm, p)),
           });
         }

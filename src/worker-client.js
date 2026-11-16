@@ -1,14 +1,15 @@
 // Promise-based calls into pdf-worker.js.
 //
 //   add    { sourceId, bytes, password? } → { pages: [{ width, height, rotation }] }
-//   export { pages }             → { bytes }   (pages: [{ sourceId, index, rotation }])
+//   export { pages, password?, privateMarks? } → { bytes, warnings }   (pages: [{ sourceId, index, rotation, marks, … }];
+//                                privateMarks: "redact" (default) or "annotate", see assemble.js)
 //   objects { sourceId, index }           → { objects }  (what can be deleted, see content.js)
 //   preview { sourceId, index, removed, edits } → { bytes }  (that page alone, objects deleted or changed)
 //   inspect { sourceId, index, id } or { sourceId, index, mark, placeholder } → { source }  (PDF source, for developers)
 //   reset  {}                    → {}
 //
 // A failed call rejects with an Error that carries the worker's `code` ("password", "encrypted",
-// "invalid"; for "password" also `wrong`: a password was given, but not the right one).
+// "invalid", "redaction"; for "password" also `wrong`: a password was given, but not the right one).
 
 export class PdfWorker {
   constructor() {

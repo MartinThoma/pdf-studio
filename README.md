@@ -14,7 +14,7 @@ After the first visit it works offline, and it can be installed as an app.
 - **Details view**: one page large, with a strip of all pages to go through them (arrow keys,
   <kbd>D</kbd> / <kbd>G</kbd> switch between *Details* and *Arrange*).
 - **Highlight** text in five colours, and **mark private parts** (names, addresses, contact data, numbers) by
-  dragging over them. See [Privacy marks](#privacy-marks).
+  dragging over them; the download removes what is under a mark and blacks it out. See [Privacy marks](#privacy-marks).
 - **Select objects** in the Details view and change or delete them: text, images, annotations
   the PDF came with, and your own marks. See [Changing and deleting objects](#changing-and-deleting-objects).
 - **Page operations in the Details view** are in the strip on the left: drag a page to move it,
@@ -46,21 +46,51 @@ In the Details view, pick *Mark private* (<kbd>P</kbd>), choose what it is (name
 phone, ID / number, other) and drag over the text. The marked text is read from the page; if there
 is none (a scan) type it in on the right. A new or selected mark shows its fields there: colour or
 category, text and a comment. The options of a tool (highlight colours, category) show in the bar
-while that tool is in use. Marks are saved with the PDF as standard
-highlight annotations, so every viewer shows them, and in the list as JSON (*Privacy list*), so a
-pseudonymizing tool does not have to read the PDF at all.
+while that tool is in use.
 
 ![Details view with a private mark and a highlight](docs/screenshot-details.png)
 
-**In the PDF**, each private mark is a `/Highlight` annotation with
-- `/Contents`: the marked text, `/Subj`: `Privacy: Name` (or Address, …), `/NM`: a unique id,
-- `/QuadPoints`: one box per line of text,
-- `/PdfStudio`: `<< /Kind /Privacy /Category (name) /Placeholder ([NAME_1]) /Id (…) /Comment (…) >>`.
+What a download does with private marks is set under the arrow next to *Download*
+(*Black out private marks*, on by default, remembered between visits):
 
-A highlight's comment is its `/Contents`, so viewers show it as the note; for a private mark `/Contents`
-stays the marked text and the comment is in `/PdfStudio` and in the privacy list.
+- **Black out (default): the text is removed.** The result has a black box where each mark is, and
+  what was under it is gone from the file, not covered: the characters are cut out of the text
+  (the rest of the line stays where it was), the pixels are blanked in images (also in scans; only
+  on the pages that have the mark, other pages keep the image), and the same is done inside groups
+  of content. Annotations that touch a mark (comments, form fields, links) and the copies of text
+  that tagged PDFs keep in their labels (`/ActualText`) are removed, and so is the page's small
+  preview picture. The mark itself is not written to the PDF, because its text, comment and category
+  would say what was removed. Highlights are kept, but a highlight over a blacked-out area does not
+  keep the text it covered in its note. A black-out can't be undone in the downloaded file; the
+  editor still has your marks and the original, so download again after a change.
+- **Keep readable:** marks only annotate; nothing is removed. Each private mark is then a
+  `/Highlight` annotation that every viewer shows and that pseudonymizing tools can read:
+  - `/Contents`: the marked text, `/Subj`: `Privacy: Name` (or Address, …), `/NM`: a unique id,
+  - `/QuadPoints`: one box per line of text,
+  - `/PdfStudio`: `<< /Kind /Privacy /Category (name) /Placeholder ([NAME_1]) /Id (…) /Comment (…) >>`.
 
-**In the privacy list** (`…-privacy.json`):
+  A highlight's comment is its `/Contents`, so viewers show it as the note; for a private mark
+  `/Contents` stays the marked text and the comment is in `/PdfStudio` and in the privacy list.
+  Anyone who opens the file can read the text, and the download says so.
+
+What can't be blacked out exactly is not left in silently:
+- An image in a format that can't be edited here (JPEG 2000, JBIG2, CCITT fax, which scanners
+  and archive tools use) that lies under a mark is removed as a whole, and the download says so.
+  JPEG and the usual raw formats are blanked pixel by pixel; a JPEG is saved again (quality 92%).
+- A page that can't be redacted reliably is an error, and nothing is saved, so a file that was
+  meant to be redacted is never saved with the text still in it. That is a page whose content
+  can't be read, or one with text in a font whose letter widths are only guessed (vertical
+  writing, East Asian encodings other than Identity-H, a missing or damaged font): there a cut
+  could miss letters.
+- Invisible text under a mark (size 0, or in the hidden text layer of a scanned page) is removed
+  like any other text.
+- **Vector drawings** (lines, shapes, text that was turned into outlines, patterns) under a mark
+  are covered by the black box but stay in the file. Check the result with a text extractor
+  (for example `pdftotext`) if it matters.
+- The document's metadata (title, author, subject, keywords) is taken from the first file and not
+  looked at.
+
+**In the privacy list** (`…-privacy.json`, the *Privacy list* button, works in both modes):
 
 ```json
 {
@@ -77,10 +107,10 @@ The same text in the same category always gets the same placeholder, so one pers
 person across all pages. A tool replaces every `text` by its `placeholder` (pages and rects tell
 where), and `replacements` turns the placeholders back into the originals later. Pages are
 numbered as in the result, coordinates are PDF points with the origin at the bottom left. The
-list contains the private texts in clear: keep it as safe as the original PDF.
+list contains the private texts in clear: keep it as safe as the original PDF. After a black-out
+the list is the only place that still has them.
 
-Marks only annotate; they do not remove anything. Pages deleted in the editor take their marks
-with them.
+Pages deleted in the editor take their marks with them.
 
 ## Changing and deleting objects
 
@@ -170,6 +200,7 @@ Chrome is somewhere else, set `CHROME=/path/to/chrome`; set `HEADED=1` to watch 
 | `src/thumbnails.js` | Previews with pdf.js, rendered lazily and kept as small JPEGs |
 | `src/pdf-worker.js`, `src/worker-client.js` | Web worker that parses uploads and builds the result |
 | `src/assemble.js` | Builds the result with pdf-lib: copy, rotate, strip cross-page references, drop unused objects |
+| `src/redact.js`, `src/image-codec.js` | Black-out of private marks: cuts characters and pixels out of the content; the codec reads and writes JPEG with the browser's canvas |
 | `src/decrypt.js`, `src/encrypt.js` | Opening password-protected PDFs (RC4, AES-128, AES-256); password protection for the download (AES-256) |
 | `src/crypto.js` | SHA-2, AES, MD5 and RC4 in plain JavaScript (Web Crypto is missing on plain `http://`) |
 | `sw.js`, `asset-manifest.js` | Service worker: caches all files on install, serves them offline |

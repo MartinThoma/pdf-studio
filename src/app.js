@@ -27,6 +27,8 @@ const ui = {
   downloadOptions: $("download-options"),
   downloadPanel: $("download-panel"),
   protect: $("protect"),
+  redact: $("redact"),
+  redactNote: $("redact-note"),
   password: $("protect-password"),
   fileName: $("file-name"),
   help: $("help"),
@@ -83,6 +85,7 @@ const state = {
   highlightColor: HIGHLIGHT_COLORS[0].id, // for the next highlight
   picked: null,
   developer: false, // developer options (in the shortcuts dialog) // objects picked with the select tool: { pageId, ids }
+  redact: true, // private marks are blacked out when downloading; false: kept readable as annotations
   markId: null, // the mark picked in the details view
 };
 const cards = new Map(); // page id → <li>
@@ -999,7 +1002,8 @@ if ("launchQueue" in window) {
 let saving = false;
 
 // Download options, under the arrow next to Download. They are applied to every download until
-// changed and kept in memory only (never stored).
+// changed and kept in memory only (never stored), except what happens to private marks: that is
+// a setting of the app and is remembered between visits.
 
 function openDownloadPanel() {
   ui.fileName.placeholder = outputName(pages());
@@ -1030,12 +1034,36 @@ function downloadPassword() {
   return ui.password.value || null;
 }
 
+const PRIVATE_KEY = "pdf-studio:private-marks"; // "annotate" when the marks are kept readable; absent = blacked out
+try {
+  state.redact = localStorage.getItem(PRIVATE_KEY) !== "annotate";
+} catch {}
+
+function showRedact() {
+  ui.redact.checked = state.redact;
+  ui.redactNote.textContent = state.redact
+    ? "The text under private marks is removed from the PDF and covered with a black box."
+    : "Private marks stay in the PDF as readable annotations, with the text. Anyone who opens the file can read it.";
+  showToolHint();
+  detail.pickKey = null; // the note in the mark panel
+  if (state.view === "details") renderDetails();
+}
+
 function showProtection() {
   const on = Boolean(downloadPassword());
   ui.download.querySelector("use").setAttribute("href", on ? "#i-lock" : "#i-download");
   ui.download.title = on ? "Download the edited PDF, protected with the password (Ctrl+S)" : "Download the edited PDF (Ctrl+S)";
   ui.downloadOptions.title = on ? "Download options: password protection is on" : "Download options";
 }
+
+ui.redact.addEventListener("change", () => {
+  state.redact = ui.redact.checked;
+  try {
+    if (state.redact) localStorage.removeItem(PRIVATE_KEY);
+    else localStorage.setItem(PRIVATE_KEY, "annotate");
+  } catch {}
+  showRedact();
+});
 
 ui.downloadOptions.addEventListener("click", () => {
   if (ui.downloadPanel.hidden) openDownloadPanel();
@@ -1084,9 +1112,10 @@ async function download() {
   const label = ui.download.querySelector(".label");
   label.textContent = "Saving…";
   try {
-    const { bytes } = await worker.call("export", {
+    const { bytes, warnings } = await worker.call("export", {
       pages: list.map(({ sourceId, index, rotation, marks, removed, edits }) => ({ sourceId, index, rotation, marks, removed, edits })),
       password: password || undefined,
+      privateMarks: state.redact ? "redact" : "annotate",
     });
     const name = fileName(ui.fileName.value) || outputName(list);
     const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
@@ -1099,9 +1128,17 @@ async function download() {
     setTimeout(() => URL.revokeObjectURL(url), 60_000);
     state.dirty = false;
     updateBars();
-    toast(`Saved “${name}” (${plural(list.length, "page")}, ${formatSize(bytes.byteLength)}${password ? ", password-protected" : ""}).`);
+    const marked = countPrivate(list);
+    const about = !marked
+      ? ""
+      : state.redact
+        ? ` ${plural(marked, "private mark")} blacked out.`
+        : ` The text under ${plural(marked, "private mark")} is still readable in the file.`;
+    toast(`Saved “${name}” (${plural(list.length, "page")}, ${formatSize(bytes.byteLength)}${password ? ", password-protected" : ""}).${about}`, { duration: marked ? 8000 : undefined });
+    if (warnings?.length) toast(warnings.join(" "), { error: true, duration: 14000 });
   } catch (error) {
-    toast(`Saving failed: ${error.message}`, { error: true, duration: 9000 });
+    const advice = error.code === "redaction" ? " Nothing was saved. To save the marks as readable annotations instead, turn off “Black out private marks” in the download options." : "";
+    toast(`Saving failed: ${error.message}${advice}`, { error: true, duration: 14000 });
   } finally {
     saving = false;
     ui.download.classList.remove("busy");
@@ -1221,11 +1258,18 @@ function setTool(tool) {
   $("category-control").hidden = state.tool !== "private";
   hideObjectHover();
   if (state.tool === "select") for (const item of detail.sheets.values()) if (item._visible && item._page) objectsOf(item._page);
+  showToolHint();
+}
+
+/** What the active tool does, said plainly; for private marks that depends on the download option. */
+function showToolHint() {
   ui.toolHint.textContent =
     state.tool === "highlight"
       ? "Drag over text to highlight it."
       : state.tool === "private"
-        ? "Drag over a name or other personal data to mark it as private."
+        ? state.redact
+          ? "Drag over a name or other personal data. When you download, the text under it is removed from the PDF and blacked out."
+          : "Drag over a name or other personal data. The text stays readable in the PDF, marked for a pseudonymizing tool."
         : "Click a text, an image or a mark to select it, then change or delete it on the right.";
 }
 
@@ -1480,6 +1524,14 @@ function markEditor(page, mark) {
   comment.addEventListener("change", () => change({ comment: comment.value.trim() }));
   comment.dataset.field = "comment";
   editor.append(field("Text under the mark", input), field("Comment", comment));
+  if (mark.kind === "private") {
+    const note = document.createElement("p");
+    note.className = "note";
+    note.textContent = state.redact
+      ? "Blacked out when you download: the text is removed from the PDF. It stays in the Privacy list."
+      : "The text stays readable in the PDF, marked for a pseudonymizing tool.";
+    editor.append(note);
+  }
   return editor;
 }
 
@@ -1948,7 +2000,9 @@ function showPdfSource(page, single, mark, key) {
       const changed = !mark && page.edits?.[single.id] !== undefined;
       ui.pickSourceText.textContent = changed
         ? `% As in the uploaded file. Saving replaces it by: ${JSON.stringify(page.edits[single.id])}\n${source}`
-        : source;
+        : mark?.kind === "private" && state.redact
+          ? `% Not written while private marks are blacked out: saving removes the text under the mark and draws a black box.\n% With that turned off in the download options, the mark becomes:\n${source.replace(/^%[^\n]*\n/, "")}`
+          : source;
     },
     (error) => {
       if (detail.pickKey === key) ui.pickSourceText.textContent = `% Could not be read: ${error.message}`;
@@ -2124,6 +2178,8 @@ ui.devOptions.addEventListener("change", () => {
   detail.pickKey = null; // fill the selection panel again
   if (state.view === "details") renderDetails();
 });
+
+showRedact();
 
 // Colour of the next highlight, remembered between visits.
 const COLOR_KEY = "pdf-studio:highlight-color";

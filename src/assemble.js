@@ -25,6 +25,7 @@ import { categoryOf, colorOf, placeholders, toPdfRect } from "./annotations.js";
 import { rewritePage } from "./content.js";
 import { loadEncrypted } from "./decrypt.js";
 import { encryptDocument } from "./encrypt.js";
+import { redactPage } from "./redact.js";
 
 export const PRODUCER = "PDF Studio (pdf-lib)";
 
@@ -85,6 +86,13 @@ async function openEncrypted(bytes, password) {
  * (see content.js); `sources` maps sourceId to the doc
  * returned by loadSource(). With `options.password` the result is encrypted with it. Returns the
  * bytes of the new PDF.
+ *
+ * `options.privateMarks` says what a private mark becomes: "redact" (the default) removes what is
+ * under it from the page and draws a black box (redact.js), "annotate" keeps the text readable
+ * and writes the mark as an annotation for pseudonymizing tools. For "redact", `options.codec`
+ * (JPEG reading and writing, see image-codec.js) lets images be blacked out in part, and
+ * `options.warnings` (an array) gets what could not be done exactly. Throws a RedactionError when
+ * a page can't be redacted: a file that was asked to be redacted is never saved with the text in it.
  */
 export async function assemble(sources, pages, options = {}) {
   if (pages.length === 0) throw new Error("Nothing to save: no pages left.");
@@ -111,7 +119,8 @@ export async function assemble(sources, pages, options = {}) {
     if (!fonts.has(fontName)) fonts.set(fontName, out.embedFont(fontName));
     return fonts.get(fontName);
   };
-  for (const { sourceId, index, rotation, marks, removed, edits } of pages) {
+  const redact = options.privateMarks !== "annotate";
+  for (const [position, { sourceId, index, rotation, marks, removed, edits }] of pages.entries()) {
     const key = `${sourceId}:${index}`;
     // The same page twice needs its own copy: a page object can only be in the tree once.
     const page = used.has(key) ? (await out.copyPages(sources.get(sourceId), [index]))[0] : copied.get(key);
@@ -119,7 +128,14 @@ export async function assemble(sources, pages, options = {}) {
     const angle = (((page.getRotation().angle + rotation) % 360) + 360) % 360;
     page.setRotation(degrees(angle));
     if (removed?.length || (edits && Object.keys(edits).length)) await rewritePage(page, { removed, edits }, embed);
-    if (marks?.length) addMarks(out, page, marks, names, sources.get(sourceId).getPage(index));
+    const sourcePage = sources.get(sourceId).getPage(index);
+    if (redact && marks?.some((mark) => mark.kind === "private")) {
+      const box = sourcePage.getCropBox();
+      const turn = sourcePage.getRotation().angle;
+      const areas = marks.filter((mark) => mark.kind === "private").flatMap((mark) => mark.rects.map((rect) => toPdfRect(rect, box, turn)));
+      await redactPage(page, areas, { codec: options.codec, warnings: options.warnings, pageNumber: position + 1 });
+    }
+    if (marks?.length) addMarks(out, page, marks, names, sourcePage, redact);
     out.addPage(page);
   }
 
@@ -136,18 +152,26 @@ const PRIVATE_COLOR = [0.96, 0.3, 0.45];
  * Writes marks as standard /Highlight annotations: any viewer shows them, and tools read the
  * covered text from /Contents and the boxes from /QuadPoints. Private marks also carry a
  * /PdfStudio dictionary with category, placeholder and id for pseudonymizing tools.
+ *
+ * With `redacted` the private marks were redacted instead (redact.js): they are not written, since
+ * the text, comment and category of a mark would give away what was taken out. A highlight over a
+ * redacted area does not keep the text it covers in its /Contents either.
  */
-function addMarks(out, page, marks, names, sourcePage) {
+function addMarks(out, page, marks, names, sourcePage, redacted = false) {
   const { context } = out;
   const box = sourcePage.getCropBox();
   const rotation = sourcePage.getRotation().angle;
+  const areas = redacted ? marks.filter((mark) => mark.kind === "private").flatMap((mark) => mark.rects) : [];
+  const written = redacted ? marks.filter((mark) => mark.kind !== "private") : marks;
+  if (written.length === 0) return;
   let annots = page.node.lookup(PDFName.of("Annots"));
   if (!(annots instanceof PDFArray)) {
     annots = context.obj([]);
     page.node.set(PDFName.of("Annots"), annots);
   }
-  for (const mark of marks) {
-    const dict = markDict(context, mark, names.get(mark.id), box, rotation);
+  for (const mark of written) {
+    const over = areas.some((area) => mark.rects.some((rect) => rect[0] < area[2] && rect[2] > area[0] && rect[1] < area[3] && rect[3] > area[1]));
+    const dict = markDict(context, over ? { ...mark, text: "" } : mark, names.get(mark.id), box, rotation);
     annots.push(context.register(dict));
   }
 }
